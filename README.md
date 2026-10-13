@@ -10,7 +10,8 @@ O projeto já inclui:
 - ranking por desconto;
 - link de afiliado retornado/gerado pela API de cada marketplace;
 - prevenção de publicação duplicada no mesmo preço;
-- publicação em grupo do WhatsApp, Telegram, webhook HTTP ou console;
+- publicação automática no Telegram e compartilhamento assistido no WhatsApp;
+- conectores opcionais para WhatsApp Groups API, webhook HTTP ou console;
 - modo de demonstração, sem credenciais e sem postagem real;
 - API de operação e banco SQLite local.
 
@@ -37,8 +38,10 @@ e apenas mostra as mensagens. Para iniciar o serviço agendado:
 uvicorn isso_facilita.app:app --reload
 ```
 
-Acesse `http://localhost:8000/docs`. Principais rotas:
+Acesse `http://localhost:8000` para abrir o painel de compartilhamento. A documentação
+da API fica em `http://localhost:8000/docs`. Principais rotas:
 
+- `GET /` — ofertas prontas com botão para compartilhar no WhatsApp;
 - `GET /health` — situação do serviço;
 - `POST /runs` — executa uma busca imediatamente;
 - `GET /publications` — histórico recente.
@@ -52,11 +55,25 @@ Copie `.env.example` para `.env` e altere:
 
 1. `ENABLED_MARKETPLACES=shopee,aliexpress` (é possível ativar apenas uma);
 2. credenciais `SHOPEE_*` e `ALIEXPRESS_*` fornecidas nos portais de afiliados;
-3. `PUBLISHER=whatsapp` e as configurações `WHATSAPP_*`; ou escolha Telegram/webhook;
+3. `PUBLISHER=telegram` e `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`;
 4. `DRY_RUN=false` somente depois de validar as mensagens;
 5. desconto mínimo, intervalo e limite de posts conforme desejado.
 
-### WhatsApp
+### Telegram e WhatsApp
+
+O Telegram é o destino automático principal. Adicione o bot como administrador do
+grupo/canal. O `CHAT_ID` pode ser um número (grupos costumam começar com `-100`) ou o
+identificador público, como `@meucanal`.
+
+Depois que a oferta for publicada no Telegram, ela aparece em `http://localhost:8000`.
+O botão **Compartilhar no WhatsApp** abre o aplicativo com o texto preenchido; escolha
+o grupo e confirme o envio. A API oficial não permite que o bot publique diretamente
+em um grupo comum criado pelo aplicativo.
+
+Se `BOT_API_TOKEN` estiver preenchido, abra o painel usando
+`http://localhost:8000/?token=SEU_TOKEN`.
+
+### WhatsApp Groups API opcional
 
 O conector usa a API oficial da Meta. São necessários:
 
@@ -69,9 +86,6 @@ O conector usa a API oficial da Meta. São necessários:
 O envio é feito com `recipient_type=group`. Um grupo pessoal existente ou uma
 comunidade comum do aplicativo não pode simplesmente receber o bot: o destino precisa
 ser reconhecido pela Groups API. Deixe `DRY_RUN=true` até validar todos esses itens.
-
-Para Telegram, adicione o bot como administrador do grupo/canal. O `CHAT_ID` pode ser
-um número (grupos costumam começar com `-100`) ou o identificador público.
 
 ### Credenciais de marketplace
 
