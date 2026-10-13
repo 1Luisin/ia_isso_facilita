@@ -12,6 +12,7 @@ def main() -> None:
     parser.add_argument("command", choices=["run-once"], help="Executa uma busca imediatamente")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     if args.command == "run-once":
         result = asyncio.run(build_service(get_settings()).run())
         print(json.dumps(result.to_dict(), ensure_ascii=False, indent=2))

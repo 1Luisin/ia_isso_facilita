@@ -5,11 +5,17 @@ from isso_facilita.publishers.base import Publisher
 
 
 class TelegramPublisher(Publisher):
-    def __init__(self, token: str, chat_id: str) -> None:
+    def __init__(
+        self,
+        token: str,
+        chat_id: str,
+        transport: httpx.AsyncBaseTransport | None = None,
+    ) -> None:
         if not token or not chat_id:
             raise ValueError("TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID são obrigatórios")
         self.api_url = f"https://api.telegram.org/bot{token}"
         self.chat_id = chat_id
+        self.transport = transport
 
     async def publish(self, product: Product, message: str) -> None:
         method = "sendPhoto" if product.image_url else "sendMessage"
@@ -18,9 +24,14 @@ class TelegramPublisher(Publisher):
             payload.update({"photo": product.image_url, "caption": message})
         else:
             payload["text"] = message
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, transport=self.transport) as client:
             response = await client.post(f"{self.api_url}/{method}", json=payload)
-            response.raise_for_status()
-            result = response.json()
-        if not result.get("ok"):
-            raise RuntimeError(f"Telegram rejeitou a publicação: {result}")
+            try:
+                result = response.json()
+            except ValueError:
+                result = {}
+        if response.is_error or not result.get("ok"):
+            description = result.get("description", "resposta inválida")
+            raise RuntimeError(
+                f"Telegram rejeitou a publicação (HTTP {response.status_code}): {description}"
+            )
