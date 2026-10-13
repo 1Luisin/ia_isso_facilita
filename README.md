@@ -10,7 +10,7 @@ O projeto já inclui:
 - ranking por desconto;
 - link de afiliado retornado/gerado pela API de cada marketplace;
 - prevenção de publicação duplicada no mesmo preço;
-- publicação em Telegram, webhook HTTP ou console;
+- publicação em grupo do WhatsApp, Telegram, webhook HTTP ou console;
 - modo de demonstração, sem credenciais e sem postagem real;
 - API de operação e banco SQLite local.
 
@@ -52,14 +52,26 @@ Copie `.env.example` para `.env` e altere:
 
 1. `ENABLED_MARKETPLACES=shopee,aliexpress` (é possível ativar apenas uma);
 2. credenciais `SHOPEE_*` e `ALIEXPRESS_*` fornecidas nos portais de afiliados;
-3. `PUBLISHER=telegram` e `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`; ou
-   `PUBLISHER=webhook` e `WEBHOOK_URL`;
+3. `PUBLISHER=whatsapp` e as configurações `WHATSAPP_*`; ou escolha Telegram/webhook;
 4. `DRY_RUN=false` somente depois de validar as mensagens;
 5. desconto mínimo, intervalo e limite de posts conforme desejado.
 
+### WhatsApp
+
+O conector usa a API oficial da Meta. São necessários:
+
+- uma conta WhatsApp Business Platform com acesso à Groups API;
+- token de acesso permanente em `WHATSAPP_ACCESS_TOKEN`;
+- identificador do número empresarial em `WHATSAPP_PHONE_NUMBER_ID`;
+- identificador do grupo criado/habilitado pela Groups API em `WHATSAPP_GROUP_ID`;
+- a versão da Graph API disponível na conta.
+
+O envio é feito com `recipient_type=group`. Um grupo pessoal existente ou uma
+comunidade comum do aplicativo não pode simplesmente receber o bot: o destino precisa
+ser reconhecido pela Groups API. Deixe `DRY_RUN=true` até validar todos esses itens.
+
 Para Telegram, adicione o bot como administrador do grupo/canal. O `CHAT_ID` pode ser
-um número (grupos costumam começar com `-100`) ou o identificador público, como
-`@meucanal`.
+um número (grupos costumam começar com `-100`) ou o identificador público.
 
 ### Credenciais de marketplace
 

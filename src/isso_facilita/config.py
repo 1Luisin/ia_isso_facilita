@@ -28,6 +28,10 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    whatsapp_access_token: str = ""
+    whatsapp_phone_number_id: str = ""
+    whatsapp_group_id: str = ""
+    whatsapp_graph_api_version: str = "v25.0"
     webhook_url: str = ""
     webhook_bearer_token: str = ""
 
