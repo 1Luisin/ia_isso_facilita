@@ -5,6 +5,8 @@ from isso_facilita.publishers.base import Publisher
 
 
 class TelegramPublisher(Publisher):
+    destination = "telegram"
+
     def __init__(
         self,
         token: str,

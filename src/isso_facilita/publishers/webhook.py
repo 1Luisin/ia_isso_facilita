@@ -5,6 +5,8 @@ from isso_facilita.publishers.base import Publisher
 
 
 class WebhookPublisher(Publisher):
+    destination = "webhook"
+
     def __init__(self, url: str, bearer_token: str = "") -> None:
         if not url:
             raise ValueError("WEBHOOK_URL é obrigatório")

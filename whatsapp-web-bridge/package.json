@@ -1,0 +1,22 @@
+{
+  "name": "isso-facilita-whatsapp-web-bridge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ponte local e não oficial entre o Isso Facilita e o WhatsApp Web",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "16.6.1",
+    "express": "5.1.0",
+    "qrcode": "1.5.4",
+    "whatsapp-web.js": "1.34.7"
+  },
+  "overrides": {
+    "puppeteer": "25.13.0"
+  }
+}

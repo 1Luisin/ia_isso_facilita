@@ -6,4 +6,8 @@ __pycache__/
 .ruff_cache/
 data/*.db
 data/*.db-*
+whatsapp-web-bridge/node_modules/
+whatsapp-web-bridge/.data/
+whatsapp-web-bridge/.wwebjs_auth/
+whatsapp-web-bridge/.wwebjs_cache/
 

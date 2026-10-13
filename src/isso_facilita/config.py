@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     whatsapp_phone_number_id: str = ""
     whatsapp_group_id: str = ""
     whatsapp_graph_api_version: str = "v25.0"
+    whatsapp_web_bridge_url: str = "http://127.0.0.1:3001"
+    whatsapp_web_bridge_token: str = ""
+    whatsapp_web_group_id: str = ""
     webhook_url: str = ""
     webhook_bearer_token: str = ""
 
@@ -40,9 +43,18 @@ class Settings(BaseSettings):
     def normalize_marketplaces(cls, value: str) -> str:
         return ",".join(item.strip().lower() for item in value.split(",") if item.strip())
 
+    @field_validator("publisher")
+    @classmethod
+    def normalize_publishers(cls, value: str) -> str:
+        return ",".join(item.strip().lower() for item in value.split(",") if item.strip())
+
     @property
     def marketplace_names(self) -> list[str]:
         return self.enabled_marketplaces.split(",")
+
+    @property
+    def publisher_names(self) -> list[str]:
+        return self.publisher.split(",")
 
 
 @lru_cache

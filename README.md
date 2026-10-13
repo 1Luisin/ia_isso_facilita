@@ -10,7 +10,7 @@ O projeto já inclui:
 - ranking por desconto;
 - link de afiliado retornado/gerado pela API de cada marketplace;
 - prevenção de publicação duplicada no mesmo preço;
-- publicação automática no Telegram e compartilhamento assistido no WhatsApp;
+- publicação automática no Telegram e, opcionalmente, em grupo comum pelo WhatsApp Web;
 - conectores opcionais para WhatsApp Groups API, webhook HTTP ou console;
 - modo de demonstração, sem credenciais e sem postagem real;
 - API de operação e banco SQLite local.
@@ -55,7 +55,7 @@ Copie `.env.example` para `.env` e altere:
 
 1. `ENABLED_MARKETPLACES=shopee,aliexpress` (é possível ativar apenas uma);
 2. credenciais `SHOPEE_*` e `ALIEXPRESS_*` fornecidas nos portais de afiliados;
-3. `PUBLISHER=telegram` e `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID`;
+3. `PUBLISHER=telegram,whatsapp_web` para publicar nos dois destinos;
 4. `DRY_RUN=false` somente depois de validar as mensagens;
 5. desconto mínimo, intervalo e limite de posts conforme desejado.
 
@@ -66,9 +66,32 @@ grupo/canal. O `CHAT_ID` pode ser um número (grupos costumam começar com `-100
 identificador público, como `@meucanal`.
 
 Depois que a oferta for publicada no Telegram, ela aparece em `http://localhost:8000`.
-O botão **Compartilhar no WhatsApp** abre o aplicativo com o texto preenchido; escolha
-o grupo e confirme o envio. A API oficial não permite que o bot publique diretamente
-em um grupo comum criado pelo aplicativo.
+O botão **Compartilhar no WhatsApp** continua disponível como alternativa manual.
+
+### WhatsApp Web não oficial
+
+Para automatizar um grupo comum com o número dedicado, existe um serviço local baseado
+em `whatsapp-web.js`. Ele não é uma API oficial da Meta: pode parar após alterações do
+WhatsApp e a conta pode sofrer limitação ou bloqueio. Use somente o número separado,
+volume baixo e mensagens solicitadas pelos participantes.
+
+Com Node.js 18 ou superior instalado:
+
+```powershell
+cd whatsapp-web-bridge
+npm install
+npm start
+```
+
+Abra `http://127.0.0.1:3001`, escaneie o QR Code com o WhatsApp Business do número
+dedicado e clique no grupo que receberá as ofertas. A sessão fica salva somente no
+computador, em uma pasta ignorada pelo Git.
+
+No `.env`, configure um segredo local em `WHATSAPP_WEB_BRIDGE_TOKEN`, mantenha
+`WHATSAPP_WEB_BRIDGE_URL=http://127.0.0.1:3001` e use
+`PUBLISHER=telegram,whatsapp_web`. O campo `WHATSAPP_WEB_GROUP_ID` pode ficar vazio,
+pois o grupo é escolhido pelo painel. O bot controla cada destino separadamente: se
+um canal falhar, o próximo ciclo tenta apenas o canal pendente.
 
 Se `BOT_API_TOKEN` estiver preenchido, abra o painel usando
 `http://localhost:8000/?token=SEU_TOKEN`.

@@ -7,6 +7,8 @@ from isso_facilita.publishers.base import Publisher
 class WhatsAppPublisher(Publisher):
     """Publica em um grupo habilitado na WhatsApp Business Platform Groups API."""
 
+    destination = "whatsapp"
+
     def __init__(
         self,
         access_token: str,

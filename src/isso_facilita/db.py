@@ -39,6 +39,17 @@ class PublicationRepository:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS publication_deliveries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    fingerprint TEXT NOT NULL,
+                    destination TEXT NOT NULL,
+                    published_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(fingerprint, destination)
+                )
+                """
+            )
 
     def contains(self, fingerprint: str) -> bool:
         with self._connection() as connection:
@@ -64,6 +75,27 @@ class PublicationRepository:
                     item.affiliate_url,
                     item.message,
                 ),
+            )
+
+    def delivered_to(self, fingerprint: str, destination: str) -> bool:
+        with self._connection() as connection:
+            row = connection.execute(
+                """
+                SELECT 1 FROM publication_deliveries
+                WHERE fingerprint = ? AND destination = ?
+                """,
+                (fingerprint, destination),
+            ).fetchone()
+        return row is not None
+
+    def record_delivery(self, fingerprint: str, destination: str) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO publication_deliveries (fingerprint, destination)
+                VALUES (?, ?)
+                """,
+                (fingerprint, destination),
             )
 
     def recent(self, limit: int = 50) -> list[dict[str, object]]:

@@ -7,5 +7,7 @@ logger = logging.getLogger(__name__)
 
 
 class ConsolePublisher(Publisher):
+    destination = "console"
+
     async def publish(self, product: Product, message: str) -> None:
         logger.info("SIMULAÇÃO | %s\n%s", product.image_url, message)

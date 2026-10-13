@@ -5,7 +5,7 @@ import pytest
 from isso_facilita.db import PublicationRepository
 from isso_facilita.models import Product
 from isso_facilita.providers.base import MarketplaceProvider
-from isso_facilita.publishers.base import Publisher
+from isso_facilita.publishers.base import MultiPublisher, Publisher
 from isso_facilita.service import PromotionService
 
 
@@ -33,6 +33,19 @@ class FakePublisher(Publisher):
 
     async def publish(self, product: Product, message: str) -> None:
         self.messages.append(message)
+
+
+class FailingPublisher(Publisher):
+    destination = "failing"
+
+    def __init__(self) -> None:
+        self.should_fail = True
+        self.calls = 0
+
+    async def publish(self, product: Product, message: str) -> None:
+        self.calls += 1
+        if self.should_fail:
+            raise RuntimeError("indisponível")
 
 
 @pytest.mark.asyncio
@@ -74,3 +87,29 @@ async def test_dry_run_does_not_create_duplicate_history(tmp_path) -> None:
     assert second.published == 1
     assert second.duplicates == 0
     assert len(publisher.messages) == 2
+
+
+@pytest.mark.asyncio
+async def test_retries_only_destination_that_failed(tmp_path) -> None:
+    successful = FakePublisher()
+    successful.destination = "successful"
+    failing = FailingPublisher()
+    service = PromotionService(
+        providers=[FakeProvider()],
+        publisher=MultiPublisher([successful, failing]),
+        repository=PublicationRepository(tmp_path / "offers.db"),
+        min_discount_percent=20,
+        max_offers_per_run=5,
+    )
+
+    first = await service.run()
+    failing.should_fail = False
+    second = await service.run()
+    third = await service.run()
+
+    assert first.published == 1
+    assert first.failures == 1
+    assert second.published == 1
+    assert third.duplicates == 1
+    assert len(successful.messages) == 1
+    assert failing.calls == 2

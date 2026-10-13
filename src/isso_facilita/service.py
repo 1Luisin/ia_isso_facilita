@@ -134,22 +134,44 @@ class PromotionService:
             ]
             eligible.sort(key=lambda item: item.discount_percent, reverse=True)
             result.eligible = len(eligible)
+            destinations = self.publisher.destinations()
             for product in eligible:
                 if result.published >= self.max_offers_per_run:
                     break
-                if self.repository.contains(product.fingerprint):
+                pending = (
+                    destinations
+                    if not self.record_publications
+                    else [
+                        publisher
+                        for publisher in destinations
+                        if not self.repository.delivered_to(
+                            product.fingerprint, publisher.destination
+                        )
+                    ]
+                )
+                if not pending:
                     result.duplicates += 1
                     continue
                 message = compose_message(product)
-                try:
-                    await self.publisher.publish(product, message)
-                except Exception:
-                    result.failures += 1
-                    logger.exception(
-                        "Falha ao publicar %s:%s", product.marketplace, product.product_id
-                    )
-                    continue
-                if self.record_publications:
+                successful = 0
+                for publisher in pending:
+                    try:
+                        await publisher.publish(product, message)
+                    except Exception:
+                        result.failures += 1
+                        logger.exception(
+                            "Falha ao publicar %s:%s em %s",
+                            product.marketplace,
+                            product.product_id,
+                            publisher.destination,
+                        )
+                        continue
+                    successful += 1
+                    if self.record_publications:
+                        self.repository.record_delivery(
+                            product.fingerprint, publisher.destination
+                        )
+                if successful and self.record_publications:
                     self.repository.add(
                         Publication(
                             fingerprint=product.fingerprint,
@@ -161,5 +183,6 @@ class PromotionService:
                             message=message,
                         )
                     )
-                result.published += 1
+                if successful:
+                    result.published += 1
             return result
