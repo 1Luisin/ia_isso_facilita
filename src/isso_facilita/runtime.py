@@ -12,4 +12,5 @@ def build_service(settings: Settings) -> PromotionService:
         repository=PublicationRepository(settings.database_path),
         min_discount_percent=settings.min_discount_percent,
         max_offers_per_run=settings.max_offers_per_run,
+        record_publications=not settings.dry_run,
     )

@@ -53,3 +53,24 @@ async def test_pipeline_publishes_once_and_deduplicates(tmp_path) -> None:
     assert second.published == 0
     assert second.duplicates == 1
     assert len(publisher.messages) == 1
+
+
+@pytest.mark.asyncio
+async def test_dry_run_does_not_create_duplicate_history(tmp_path) -> None:
+    publisher = FakePublisher()
+    service = PromotionService(
+        providers=[FakeProvider()],
+        publisher=publisher,
+        repository=PublicationRepository(tmp_path / "offers.db"),
+        min_discount_percent=20,
+        max_offers_per_run=5,
+        record_publications=False,
+    )
+
+    first = await service.run()
+    second = await service.run()
+
+    assert first.published == 1
+    assert second.published == 1
+    assert second.duplicates == 0
+    assert len(publisher.messages) == 2

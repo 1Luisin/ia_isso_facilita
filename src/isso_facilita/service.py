@@ -99,12 +99,14 @@ class PromotionService:
         repository: PublicationRepository,
         min_discount_percent: float,
         max_offers_per_run: int,
+        record_publications: bool = True,
     ) -> None:
         self.providers = providers
         self.publisher = publisher
         self.repository = repository
         self.min_discount_percent = min_discount_percent
         self.max_offers_per_run = max_offers_per_run
+        self.record_publications = record_publications
         self._run_lock = asyncio.Lock()
 
     async def run(self) -> RunResult:
@@ -147,16 +149,17 @@ class PromotionService:
                         "Falha ao publicar %s:%s", product.marketplace, product.product_id
                     )
                     continue
-                self.repository.add(
-                    Publication(
-                        fingerprint=product.fingerprint,
-                        marketplace=product.marketplace,
-                        product_id=product.product_id,
-                        title=product.title,
-                        price=product.price,
-                        affiliate_url=product.affiliate_url,
-                        message=message,
+                if self.record_publications:
+                    self.repository.add(
+                        Publication(
+                            fingerprint=product.fingerprint,
+                            marketplace=product.marketplace,
+                            product_id=product.product_id,
+                            title=product.title,
+                            price=product.price,
+                            affiliate_url=product.affiliate_url,
+                            message=message,
+                        )
                     )
-                )
                 result.published += 1
             return result
