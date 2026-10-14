@@ -1,4 +1,5 @@
 from decimal import Decimal
+from urllib.parse import parse_qs
 
 import httpx
 import pytest
@@ -92,3 +93,73 @@ async def test_parses_products_with_affiliate_links(monkeypatch) -> None:
     assert len(products) == 1
     assert products[0].price == Decimal("100.00")
     assert products[0].affiliate_url == "https://example.com/affiliate"
+
+
+@pytest.mark.asyncio
+async def test_prefers_official_short_affiliate_link(monkeypatch) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        params = parse_qs(request.content.decode())
+        if params.get("method") == ["aliexpress.affiliate.link.generate"]:
+            return httpx.Response(
+                200,
+                json={
+                    "aliexpress_affiliate_link_generate_response": {
+                        "resp_result": {
+                            "resp_code": 200,
+                            "result": {
+                                "promotion_links": {
+                                    "promotion_link": [
+                                        {
+                                            "source_value": (
+                                                "https://www.aliexpress.com/item/42.html"
+                                            ),
+                                            "promotion_link": (
+                                                "https://s.click.aliexpress.com/e/_short"
+                                            ),
+                                        }
+                                    ]
+                                }
+                            },
+                        }
+                    }
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "aliexpress_affiliate_hotproduct_query_response": {
+                    "resp_result": {
+                        "resp_code": 200,
+                        "result": {
+                            "products": {
+                                "product": [
+                                    {
+                                        "product_id": "42",
+                                        "product_title": "SSD NVMe",
+                                        "product_main_image_url": "https://example.com/image.jpg",
+                                        "product_detail_url": "https://example.com/product",
+                                        "promotion_link": "https://example.com/very-long-link",
+                                        "target_sale_price": "100.00",
+                                        "target_original_price": "200.00",
+                                        "target_sale_price_currency": "BRL",
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                }
+            },
+        )
+
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: original_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+
+    products = await AliExpressProvider(settings()).discover()
+
+    assert products[0].affiliate_url == "https://s.click.aliexpress.com/e/_short"

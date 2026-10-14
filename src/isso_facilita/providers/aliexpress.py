@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import logging
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 
@@ -8,6 +9,8 @@ import httpx
 from isso_facilita.config import Settings
 from isso_facilita.models import Product
 from isso_facilita.providers.base import MarketplaceProvider
+
+logger = logging.getLogger(__name__)
 
 
 def _decimal(value: object) -> Decimal:
@@ -97,9 +100,75 @@ class AliExpressProvider(MarketplaceProvider):
             raise RuntimeError(f"AliExpress rejeitou a consulta: {envelope}")
         result = envelope.get("result", {})
         raw_products = result.get("products", {}).get("product", []) or []
-        return [self._to_product(item) for item in raw_products]
+        short_links = await self._generate_short_links(raw_products)
+        return [
+            self._to_product(item, short_links.get(str(item.get("product_id", ""))))
+            for item in raw_products
+        ]
 
-    def _to_product(self, item: dict[str, object]) -> Product:
+    async def _generate_short_links(
+        self, items: list[dict[str, object]]
+    ) -> dict[str, str]:
+        sources = {
+            str(item.get("product_id", "")): (
+                f"https://www.aliexpress.com/item/{item.get('product_id')}.html"
+            )
+            for item in items
+            if item.get("product_id")
+        }
+        if not sources:
+            return {}
+
+        timestamp = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
+        params = {
+            "app_key": self.app_key,
+            "format": "json",
+            "method": "aliexpress.affiliate.link.generate",
+            "promotion_link_type": "0",
+            "sign_method": "md5",
+            "source_values": ",".join(sources.values()),
+            "timestamp": timestamp,
+            "tracking_id": self.tracking_id,
+            "v": "2.0",
+        }
+        params["sign"] = sign_top_request(params, self.secret)
+        try:
+            async with httpx.AsyncClient(timeout=30) as client:
+                response = await client.post(self.api_url, data=params)
+                response.raise_for_status()
+                payload = response.json()
+            if error := payload.get("error_response"):
+                message = error.get("sub_msg") or error.get("msg") or "erro não informado"
+                raise RuntimeError(message)
+            envelope = payload.get(
+                "aliexpress_affiliate_link_generate_response", {}
+            ).get("resp_result", {})
+            if str(envelope.get("resp_code", "200")) != "200":
+                raise RuntimeError(str(envelope.get("resp_msg", "resposta inválida")))
+            raw_links = (
+                envelope.get("result", {})
+                .get("promotion_links", {})
+                .get("promotion_link", [])
+                or []
+            )
+        except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+            logger.warning("Não foi possível encurtar links do AliExpress: %s", exc)
+            return {}
+
+        by_source = {
+            str(item.get("source_value")): str(item.get("promotion_link"))
+            for item in raw_links
+            if item.get("source_value") and item.get("promotion_link")
+        }
+        return {
+            product_id: by_source[source]
+            for product_id, source in sources.items()
+            if source in by_source
+        }
+
+    def _to_product(
+        self, item: dict[str, object], short_link: str | None = None
+    ) -> Product:
         price = _decimal(item.get("target_sale_price") or item.get("sale_price"))
         original = _decimal(item.get("target_original_price") or item.get("original_price"))
         return Product(
@@ -107,7 +176,7 @@ class AliExpressProvider(MarketplaceProvider):
             product_id=str(item.get("product_id", "")),
             title=str(item.get("product_title", "")),
             product_url=str(item.get("product_detail_url", "")),
-            affiliate_url=str(item.get("promotion_link", "")),
+            affiliate_url=short_link or str(item.get("promotion_link", "")),
             image_url=str(item.get("product_main_image_url", "")),
             price=price,
             original_price=original,
