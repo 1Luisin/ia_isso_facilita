@@ -6,6 +6,7 @@ from isso_facilita.publishers.base import Publisher
 
 class TelegramPublisher(Publisher):
     destination = "telegram"
+    caption_limit = 1024
 
     def __init__(
         self,
@@ -20,9 +21,10 @@ class TelegramPublisher(Publisher):
         self.transport = transport
 
     async def publish(self, product: Product, message: str) -> None:
-        method = "sendPhoto" if product.image_url else "sendMessage"
+        use_photo = bool(product.image_url) and len(message) <= self.caption_limit
+        method = "sendPhoto" if use_photo else "sendMessage"
         payload = {"chat_id": self.chat_id}
-        if product.image_url:
+        if use_photo:
             payload.update({"photo": product.image_url, "caption": message})
         else:
             payload["text"] = message
