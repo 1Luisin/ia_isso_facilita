@@ -24,7 +24,8 @@ class Settings(BaseSettings):
     aliexpress_app_key: str = ""
     aliexpress_app_secret: str = ""
     aliexpress_tracking_id: str = ""
-    aliexpress_api_url: str = "https://eco.taobao.com/router/rest"
+    aliexpress_api_url: str = "https://api-sg.aliexpress.com/sync"
+    aliexpress_keywords: str = "smartphone,ssd,laptop,headphones,smartwatch,mouse,keyboard,charger"
 
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""

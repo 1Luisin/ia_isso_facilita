@@ -1,3 +1,4 @@
+import asyncio
 import hashlib
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
@@ -39,8 +40,23 @@ class AliExpressProvider(MarketplaceProvider):
         self.secret = settings.aliexpress_app_secret
         self.tracking_id = settings.aliexpress_tracking_id
         self.api_url = settings.aliexpress_api_url
+        self.keywords = [
+            keyword.strip()
+            for keyword in settings.aliexpress_keywords.split(",")
+            if keyword.strip()
+        ]
 
     async def discover(self) -> list[Product]:
+        batches = await asyncio.gather(
+            *(self._discover_keyword(keyword) for keyword in self.keywords)
+        )
+        unique: dict[str, Product] = {}
+        for batch in batches:
+            for product in batch:
+                unique[product.product_id] = product
+        return list(unique.values())
+
+    async def _discover_keyword(self, keyword: str) -> list[Product]:
         timestamp = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
         params = {
             "app_key": self.app_key,
@@ -50,8 +66,10 @@ class AliExpressProvider(MarketplaceProvider):
             ),
             "format": "json",
             "method": "aliexpress.affiliate.hotproduct.query",
+            "keywords": keyword,
             "page_no": "1",
-            "page_size": "50",
+            "page_size": "20",
+            "ship_to_country": "BR",
             "sign_method": "md5",
             "target_currency": "BRL",
             "target_language": "PT",
@@ -64,7 +82,16 @@ class AliExpressProvider(MarketplaceProvider):
             response = await client.post(self.api_url, data=params)
             response.raise_for_status()
             payload = response.json()
-        response_key = next((key for key in payload if key.endswith("_response")), "")
+        if error := payload.get("error_response"):
+            code = error.get("sub_code") or error.get("code") or "desconhecido"
+            message = error.get("sub_msg") or error.get("msg") or "erro não informado"
+            raise RuntimeError(f"AliExpress rejeitou a consulta ({code}): {message}")
+        response_key = next(
+            (key for key in payload if key.endswith("_response") and key != "error_response"),
+            "",
+        )
+        if not response_key:
+            raise RuntimeError("AliExpress retornou uma resposta sem dados reconhecíveis")
         envelope = payload.get(response_key, {}).get("resp_result", {})
         if str(envelope.get("resp_code", "200")) != "200":
             raise RuntimeError(f"AliExpress rejeitou a consulta: {envelope}")
