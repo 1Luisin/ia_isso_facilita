@@ -229,12 +229,13 @@ app.post("/send", requireToken, (request, response) => {
     const elapsed = Date.now() - lastSentAt;
     if (elapsed < minimumSendInterval) await wait(minimumSendInterval - elapsed);
 
-    let imageMessage = null;
+    let message;
+    let mediaAttached = false;
     if (imageUrl) {
       try {
         const media = await MessageMedia.fromUrl(imageUrl, { unsafeMime: true });
-        imageMessage = await chat.sendMessage(media);
-        await wait(750);
+        message = await chat.sendMessage(media, { caption: text });
+        mediaAttached = true;
       } catch (error) {
         console.error("Não foi possível anexar a imagem do produto.", error);
         throw Object.assign(
@@ -242,19 +243,19 @@ app.post("/send", requireToken, (request, response) => {
           { statusCode: 502 },
         );
       }
+    } else {
+      message = await chat.sendMessage(text, { linkPreview: false });
     }
-    const textMessage = await chat.sendMessage(text, { linkPreview: false });
     lastSentAt = Date.now();
-    return { textMessage, imageMessage };
+    return { message, mediaAttached };
   };
 
   sendQueue = sendQueue.then(task, task);
   sendQueue
-    .then(({ textMessage, imageMessage }) => response.json({
+    .then(({ message, mediaAttached }) => response.json({
       ok: true,
-      message_id: textMessage.id?._serialized || "",
-      image_message_id: imageMessage?.id?._serialized || "",
-      media_attached: !!imageMessage,
+      message_id: message.id?._serialized || "",
+      media_attached: mediaAttached,
     }))
     .catch((error) => {
       console.error("Falha ao enviar mensagem ao grupo.");
