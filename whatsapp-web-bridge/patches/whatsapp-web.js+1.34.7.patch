@@ -1,8 +1,16 @@
 diff --git a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
-index 540078a..7b96045 100644
+index 540078a..e92780a 100644
 --- a/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
 +++ b/node_modules/whatsapp-web.js/src/util/Injected/Utils.js
-@@ -582,7 +582,7 @@ exports.LoadUtils = () => {
+@@ -482,6 +482,7 @@ exports.LoadUtils = () => {
+             ...botOptions,
+             ...extraOptions,
+         };
++        delete message.__x_id;
+ 
+         // Bot's won't reply if canonicalUrl is set (linking)
+         if (botOptions) {
+@@ -582,7 +583,7 @@ exports.LoadUtils = () => {
  
          return window
              .require('WAWebCollections')
@@ -11,7 +19,7 @@ index 540078a..7b96045 100644
      };
  
      window.WWebJS.editMessage = async (msg, content, options = {}) => {
-@@ -625,7 +625,9 @@ exports.LoadUtils = () => {
+@@ -625,7 +626,9 @@ exports.LoadUtils = () => {
          await window
              .require('WAWebSendMessageEditAction')
              .sendMessageEdit(msg, content, internalOptions);
@@ -22,7 +30,7 @@ index 540078a..7b96045 100644
      };
  
      window.WWebJS.toStickerData = async (mediaInfo) => {
-@@ -834,6 +836,15 @@ exports.LoadUtils = () => {
+@@ -834,6 +837,15 @@ exports.LoadUtils = () => {
              });
          }
  
@@ -38,7 +46,7 @@ index 540078a..7b96045 100644
          delete msg.pendingAckUpdate;
  
          return msg;
-@@ -917,12 +928,21 @@ exports.LoadUtils = () => {
+@@ -917,12 +929,21 @@ exports.LoadUtils = () => {
          };
      };
  
@@ -64,7 +72,7 @@ index 540078a..7b96045 100644
      };
  
      window.WWebJS.getChannels = async () => {
-@@ -957,7 +977,11 @@ exports.LoadUtils = () => {
+@@ -957,7 +978,11 @@ exports.LoadUtils = () => {
              const groupMetadata =
                  window.require('WAWebCollections').GroupMetadata ||
                  window.require('WAWebCollections').WAWebGroupMetadataCollection;
@@ -77,7 +85,7 @@ index 540078a..7b96045 100644
              const { toPn } = window.require('WAWebLidMigrationUtils');
              const serializedMetadata = chat.groupMetadata.serialize();
              for (const p of serializedMetadata.participants || []) {
-@@ -981,16 +1005,17 @@ exports.LoadUtils = () => {
+@@ -981,16 +1006,17 @@ exports.LoadUtils = () => {
  
          model.lastMessage = null;
          if (model.msgs && model.msgs.length) {

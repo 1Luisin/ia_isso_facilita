@@ -10,4 +10,5 @@ whatsapp-web-bridge/node_modules/
 whatsapp-web-bridge/.data/
 whatsapp-web-bridge/.wwebjs_auth/
 whatsapp-web-bridge/.wwebjs_cache/
+.wwebjs_cache/
 
