@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     dry_run: bool = True
     scan_interval_minutes: int = Field(default=30, ge=1)
     min_discount_percent: float = Field(default=20, ge=0, le=100)
+    include_non_promotional_products: bool = True
     max_offers_per_run: int = Field(default=5, ge=1, le=50)
     database_path: Path = Path("data/offers.db")
     bot_api_token: str = ""
@@ -21,8 +22,10 @@ class Settings(BaseSettings):
     ai_curation_enabled: bool = False
     ai_provider: Literal["ollama", "openai"] = "ollama"
     ai_relevance_threshold: int = Field(default=75, ge=0, le=100)
+    max_ai_evaluations_per_run: int = Field(default=6, ge=1, le=30)
     brand_identity_path: Path = Path("config/brand_identity.json")
-    ollama_model: str = "qwen3:4b"
+    ollama_model: str = "qwen3-vl:2b-instruct"
+    ollama_use_product_images: bool = True
     ollama_api_url: str = "http://127.0.0.1:11434"
     ollama_timeout_seconds: float = Field(default=180, ge=10, le=600)
     openai_api_key: str = ""
@@ -38,7 +41,12 @@ class Settings(BaseSettings):
     aliexpress_app_secret: str = ""
     aliexpress_tracking_id: str = ""
     aliexpress_api_url: str = "https://api-sg.aliexpress.com/sync"
-    aliexpress_keywords: str = "smartphone,ssd,laptop,headphones,smartwatch,mouse,keyboard,charger"
+    aliexpress_keywords: str = (
+        "mechanical keyboard,keycaps,wireless mouse,deskmat,monitor light bar,"
+        "monitor arm,laptop stand,usb hub,microphone,bluetooth headphones,gan charger,"
+        "ssd nvme,portable monitor,anime action figure 25cm,vocaloid action figure,"
+        "hatsune miku figure,sanrio desk accessory"
+    )
 
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""

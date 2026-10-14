@@ -15,6 +15,7 @@ def build_service(settings: Settings) -> PromotionService:
                 identity_path=settings.brand_identity_path,
                 api_url=settings.ollama_api_url,
                 timeout_seconds=settings.ollama_timeout_seconds,
+                use_product_images=settings.ollama_use_product_images,
             )
         else:
             curator = OpenAICurator(
@@ -29,8 +30,10 @@ def build_service(settings: Settings) -> PromotionService:
         publisher=build_publisher(settings),
         repository=PublicationRepository(settings.database_path),
         min_discount_percent=settings.min_discount_percent,
+        include_non_promotional_products=settings.include_non_promotional_products,
         max_offers_per_run=settings.max_offers_per_run,
         record_publications=not settings.dry_run,
         curator=curator,
         ai_relevance_threshold=settings.ai_relevance_threshold,
+        max_ai_evaluations_per_run=settings.max_ai_evaluations_per_run,
     )

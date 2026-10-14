@@ -4,7 +4,13 @@ from decimal import Decimal
 import httpx
 import pytest
 
-from isso_facilita.curation import CurationError, OllamaCurator, OpenAICurator
+from isso_facilita.curation import (
+    CurationError,
+    CurationResult,
+    OllamaCurator,
+    OpenAICurator,
+    _validate_copy,
+)
 from isso_facilita.models import Product
 
 
@@ -57,6 +63,7 @@ async def test_curator_returns_structured_copy_without_sending_commercial_fields
                                             "Um achadinho sem fio para acompanhar sua rotina."
                                         ),
                                         "reason": "Produto útil e alinhado à página.",
+                                        "category": "tech",
                                     }
                                 ),
                             }
@@ -99,6 +106,7 @@ async def test_curator_rejects_invented_numbers(tmp_path) -> None:
                                         "headline": "Bateria para 48 horas",
                                         "description": "Tecnologia para o dia a dia.",
                                         "reason": "Parece relevante.",
+                                        "category": "tech",
                                     }
                                 ),
                             }
@@ -124,7 +132,7 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.url == "http://127.0.0.1:11434/api/chat"
         payload = json.loads(request.content)
-        assert payload["model"] == "qwen3:4b"
+        assert payload["model"] == "qwen3-vl:4b"
         assert payload["stream"] is False
         assert payload["think"] is False
         assert payload["format"]["type"] == "object"
@@ -134,6 +142,17 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
         assert "132.59" not in serialized
         assert "_short" not in serialized
         assert "Aparência é um diferencial" in serialized
+        assert "Não repita mecanicamente o título" in serialized
+        assert "A palavra 'cosplay' não descreve keycaps" in serialized
+        assert "Nunca diga que uma característica está ausente" in serialized
+        assert "não repita nelas a mesma característica" in serialized
+        assert "não prova conforto" in serialized
+        assert "personagens de anime, Sanrio" in serialized
+        assert "não precisam ter função tecnológica" in serialized
+        assert "Anime, Sanrio e estética fofa são alternativas" in serialized
+        assert "standee de Project Sekai" in serialized
+        assert "nunca deve aparecer na copy" in serialized
+        assert "produto exato" in serialized or "objeto exato" in serialized
         return httpx.Response(
             200,
             json={
@@ -143,8 +162,12 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
                         {
                             "relevant": True,
                             "headline": "Som prático para acompanhar sua rotina ✦",
-                            "description": "Um achadinho sem fio e fácil de usar no dia a dia.",
+                            "product_type": "Fones de ouvido",
+                            "description": (
+                                "Fones de ouvido Bluetooth com gancho ajustável."
+                            ),
                             "reason": "O produto combina com a identidade da página.",
+                            "category": "tech",
                         }
                     ),
                 },
@@ -153,7 +176,7 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
         )
 
     curator = OllamaCurator(
-        model="qwen3:4b",
+        model="qwen3-vl:4b",
         identity_path=identity_file(tmp_path),
         transport=httpx.MockTransport(handler),
     )
@@ -163,6 +186,7 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
     assert result.relevant
     assert result.relevance_score == 100
     assert result.headline.endswith("✦")
+    assert result.description == "Fones de ouvido Bluetooth com gancho ajustável."
 
 
 @pytest.mark.asyncio
@@ -178,3 +202,166 @@ async def test_ollama_curator_reports_connection_failure(tmp_path) -> None:
 
     with pytest.raises(CurationError, match="conectar ao Ollama"):
         await curator.curate(product())
+
+
+@pytest.mark.asyncio
+async def test_ollama_repairs_unsupported_copy_once(tmp_path) -> None:
+    calls = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        payload = json.loads(request.content)
+        if calls == 1:
+            content = {
+                "relevant": True,
+                "headline": "Fones para seu setup",
+                "product_type": "Fones de ouvido",
+                "description": "Fones de ouvido confortáveis para o computador.",
+                "reason": "Produto de áudio.",
+                "category": "tech",
+            }
+        else:
+            assert "conforto ausente" in payload["messages"][-1]["content"]
+            content = {
+                "relevant": True,
+                "headline": "Som sem fio para acompanhar seu ritmo ✦",
+                "product_type": "Fones de ouvido",
+                "description": "Fones de ouvido Bluetooth com gancho ajustável.",
+                "reason": "Características presentes no título.",
+                "category": "tech",
+            }
+        return httpx.Response(
+            200,
+            json={"message": {"role": "assistant", "content": json.dumps(content)}},
+        )
+
+    curator = OllamaCurator(
+        model="qwen3:4b",
+        identity_path=identity_file(tmp_path),
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = await curator.curate(product())
+
+    assert calls == 2
+    assert result.relevant
+    assert result.description == "Fones de ouvido Bluetooth com gancho ajustável."
+
+
+@pytest.mark.asyncio
+async def test_ollama_sends_product_image_to_vision_model(tmp_path) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        if request.method == "GET":
+            return httpx.Response(
+                200,
+                content=b"fake-image",
+                headers={"content-type": "image/jpeg"},
+            )
+        payload = json.loads(request.content)
+        assert payload["messages"][1]["images"]
+        return httpx.Response(
+            200,
+            json={
+                "message": {
+                    "role": "assistant",
+                    "content": json.dumps(
+                        {
+                            "relevant": True,
+                            "headline": "Áudio sem fio para acompanhar seu ritmo ✦",
+                            "product_type": "Fones de ouvido Bluetooth",
+                            "description": (
+                                "Fones de ouvido Bluetooth com gancho ajustável."
+                            ),
+                            "reason": "Objeto e característica confirmados.",
+                            "category": "tech",
+                        }
+                    ),
+                }
+            },
+        )
+
+    curator = OllamaCurator(
+        model="qwen3-vl:4b",
+        identity_path=identity_file(tmp_path),
+        use_product_images=True,
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = await curator.curate(product())
+
+    assert result.relevant
+    assert "Bluetooth" in result.description
+
+
+def test_copy_uses_action_figure_instead_of_portuguese_figura() -> None:
+    item = Product(
+        marketplace="aliexpress",
+        product_id="miku",
+        title="Hatsune Miku Action Figure Vocaloid",
+        product_url="https://example.com/item",
+        affiliate_url="https://example.com/affiliate",
+        image_url="",
+        price=product().price,
+        original_price=product().original_price,
+    )
+    result = _validate_copy(
+        item,
+        CurationResult(
+            relevant=True,
+            relevance_score=100,
+            headline="Figura da Hatsune Miku para fãs de Vocaloid ✦",
+            description="Figura da Hatsune Miku para completar a coleção.",
+            reason="Colecionável de Vocaloid.",
+            category="general",
+        ),
+    )
+
+    assert "Action Figure" in result.headline
+    assert "Action Figure" in result.description
+    assert "Figura" not in result.description
+
+
+def test_copy_rejects_kawaii_as_generic_published_word() -> None:
+    with pytest.raises(CurationError, match="genérica ou proibida"):
+        _validate_copy(
+            product(),
+            CurationResult(
+                relevant=True,
+                relevance_score=100,
+                headline="Um acessório kawaii para sua rotina",
+                description="Fones de ouvido Bluetooth com gancho ajustável.",
+                reason="Produto de áudio.",
+                category="tech",
+            ),
+        )
+
+
+def test_copy_rejects_incomplete_or_repeated_description() -> None:
+    with pytest.raises(CurationError, match="incompleta"):
+        _validate_copy(
+            product(),
+            CurationResult(
+                relevant=True,
+                relevance_score=100,
+                headline="Áudio sem fio para acompanhar seu ritmo ✦",
+                product_name="Fones de ouvido",
+                description="Fones de ouvido Bluetooth com gancho ajustável e",
+                reason="Produto de áudio.",
+                category="tech",
+            ),
+        )
+
+    with pytest.raises(CurationError, match="repetiu o nome"):
+        _validate_copy(
+            product(),
+            CurationResult(
+                relevant=True,
+                relevance_score=100,
+                headline="Fones de ouvido ✿",
+                product_name="Fones de ouvido",
+                description="Fones de ouvido Bluetooth com gancho ajustável.",
+                reason="Produto de áudio.",
+                category="tech",
+            ),
+        )

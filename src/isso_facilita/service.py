@@ -51,14 +51,110 @@ TECH_KEYWORDS = {
     "pendrive",
 }
 
+CHARACTER_AND_DECOR_KEYWORDS = {
+    "action figure",
+    "anime",
+    "boneco",
+    "boneca",
+    "chibi",
+    "cinnamoroll",
+    "decoracao",
+    "estatua",
+    "figure",
+    "figura",
+    "fofo",
+    "hello kitty",
+    "kawaii",
+    "keroppi",
+    "kuromi",
+    "mascote",
+    "miniatura",
+    "my melody",
+    "ornamento",
+    "pelucia",
+    "pochacco",
+    "pompompurin",
+    "sanrio",
+}
+
+SETUP_KEYWORDS = {
+    "apoio de pulso",
+    "braco de monitor",
+    "deskmat",
+    "hub usb",
+    "keycap",
+    "keycaps",
+    "laptop stand",
+    "light bar",
+    "luminaria de monitor",
+    "microfone",
+    "monitor",
+    "mouse",
+    "mousepad",
+    "organizador de cabo",
+    "suporte de monitor",
+    "suporte para notebook",
+    "teclado",
+    "webcam",
+}
+
+ANIME_AND_VOCALOID_KEYWORDS = {
+    "anime",
+    "chainsaw man",
+    "demon slayer",
+    "dragon ball",
+    "evangelion",
+    "frieren",
+    "genshin",
+    "hatsune miku",
+    "jujutsu kaisen",
+    "miku",
+    "naruto",
+    "one piece",
+    "project sekai",
+    "re zero",
+    "vocaloid",
+}
+
+SANRIO_KEYWORDS = {
+    "cinnamoroll",
+    "hello kitty",
+    "keroppi",
+    "kuromi",
+    "my melody",
+    "pochacco",
+    "pompompurin",
+    "sanrio",
+}
+
+COLLECTIBLE_KEYWORDS = {
+    "action figure",
+    "boneco",
+    "boneca",
+    "estatua",
+    "figure",
+    "figura",
+    "miniatura",
+    "standee",
+}
+
+# O foco editorial é setup/tecnologia. Colecionáveis entram de forma planejada,
+# sem dominar a sequência só porque aparecem com desconto percentual maior.
+EDITORIAL_ROTATION = (
+    "setup",
+    "technology",
+    "setup",
+    "anime_collectible",
+    "setup",
+    "technology",
+    "setup",
+    "character_collectible",
+)
+
 NON_TECH_KEYWORDS = {
     "baralho",
     "board game",
-    "disney",
     "jogo de mesa",
-    "mickey mouse",
-    "mimi mouse",
-    "minnie mouse",
     "oracle",
     "tarot",
 }
@@ -76,10 +172,104 @@ def is_technology(product: Product) -> bool:
     title = normalize(product.title)
     if any(keyword in title for keyword in NON_TECH_KEYWORDS):
         return False
+    accepted_keywords = TECH_KEYWORDS | CHARACTER_AND_DECOR_KEYWORDS
     return any(
         re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", title)
-        for keyword in TECH_KEYWORDS
+        for keyword in accepted_keywords
     )
+
+
+def is_technology_category(product: Product) -> bool:
+    return classify_content_bucket(product) in {"setup", "technology"}
+
+
+def _contains_keyword(title: str, keywords: set[str]) -> bool:
+    return any(
+        re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", title)
+        for keyword in keywords
+    )
+
+
+def classify_content_bucket(product: Product) -> str:
+    title = normalize(product.title)
+    if _contains_keyword(title, SETUP_KEYWORDS):
+        return "setup"
+    if _contains_keyword(title, COLLECTIBLE_KEYWORDS) and _contains_keyword(
+        title, ANIME_AND_VOCALOID_KEYWORDS
+    ):
+        return "anime_collectible"
+    if _contains_keyword(title, SANRIO_KEYWORDS):
+        return "character_collectible"
+    if _contains_keyword(title, TECH_KEYWORDS):
+        return "technology"
+    if _contains_keyword(title, CHARACTER_AND_DECOR_KEYWORDS):
+        return "character_collectible"
+    return "other"
+
+
+def _product_priority(product: Product) -> tuple[float, float]:
+    title = normalize(product.title)
+    specificity = 0.0
+    if "action figure" in title or "estatua" in title:
+        specificity += 25
+    if "vocaloid" in title or "hatsune miku" in title:
+        specificity += 15
+    if re.search(r"(?:2[0-9]|3[0-9]|40)\s*cm", title):
+        specificity += 20
+    if any(term in title for term in ("mecanico", "hot-swap", "pbt", "nvme", "gan")):
+        specificity += 15
+    if any(term in title for term in ("gashapon", "chaveiro", "acrilico", "standee")):
+        specificity -= 15
+    return specificity, product.discount_percent
+
+
+def _interleave_prices(products: list[Product], minimum_discount: float) -> list[Product]:
+    promotional = sorted(
+        (item for item in products if item.discount_percent >= minimum_discount),
+        key=_product_priority,
+        reverse=True,
+    )
+    regular = sorted(
+        (item for item in products if item.discount_percent < minimum_discount),
+        key=_product_priority,
+        reverse=True,
+    )
+    return [
+        item
+        for index in range(max(len(promotional), len(regular)))
+        for item in (
+            promotional[index] if index < len(promotional) else None,
+            regular[index] if index < len(regular) else None,
+        )
+        if item is not None
+    ]
+
+
+def order_for_editorial_rotation(
+    products: list[Product], minimum_discount: float, rotation_index: int
+) -> list[Product]:
+    grouped: dict[str, list[Product]] = {}
+    for product in products:
+        grouped.setdefault(classify_content_bucket(product), []).append(product)
+
+    bucket_order: list[str] = []
+    for offset in range(len(EDITORIAL_ROTATION)):
+        bucket = EDITORIAL_ROTATION[(rotation_index + offset) % len(EDITORIAL_ROTATION)]
+        if bucket not in bucket_order:
+            bucket_order.append(bucket)
+    bucket_order.extend(
+        bucket for bucket in grouped if bucket not in bucket_order
+    )
+    ordered: list[Product] = []
+    for bucket in bucket_order:
+        bucket_products = grouped.get(bucket, [])
+        if bucket == "anime_collectible":
+            # Uma Action Figure específica e maior deve vencer brindes, standees e
+            # miniaturas genéricas, mesmo que estes exibam um desconto percentual maior.
+            ordered.extend(sorted(bucket_products, key=_product_priority, reverse=True))
+        else:
+            ordered.extend(_interleave_prices(bucket_products, minimum_discount))
+    return ordered
 
 
 def format_money(value: Decimal, currency: str) -> str:
@@ -92,22 +282,31 @@ def format_money(value: Decimal, currency: str) -> str:
 def compose_message(product: Product, curation: CurationResult | None = None) -> str:
     marketplace = product.marketplace.title()
     discount = round(product.discount_percent)
-    old_price = format_money(product.original_price, product.currency)
     price = format_money(product.price, product.currency)
+    if product.discount_percent > 0:
+        old_price = format_money(product.original_price, product.currency)
+        price_block = (
+            f"⊹ De: {old_price}\n"
+            f"✦ Por: {price}\n"
+            f"ᯓ★ Desconto: {discount}% OFF\n\n"
+        )
+    else:
+        price_block = f"✦ Preço: {price}\n\n"
     editorial = ""
     if curation:
         editorial = f"{curation.headline}\n{curation.description}\n\n"
+    is_tech = (
+        curation.category == "tech" if curation else is_technology_category(product)
+    )
+    section_label = "achadinho tech" if is_tech else "achadinho"
+    display_name = curation.product_name if curation and curation.product_name else product.title
     return (
         "✿ ISSO FACILITA ✿\n"
-        "⋆｡°✩ achadinho tech ✩°｡⋆\n\n"
+        f"⋆｡°✩ {section_label} ✩°｡⋆\n\n"
         f"{editorial}"
-        f"𖥔 Produto: {product.title}\n\n"
-        f"⊹ De: {old_price}\n"
-        f"✦ Por: {price}\n"
-        f"ᯓ★ Desconto: {discount}% OFF\n\n"
-        f"╰┈➤ Confira no {marketplace}: {product.affiliate_url}\n\n"
-        "⚠️ Preço e estoque podem mudar. Link de afiliado: podemos receber "
-        "uma comissão sem custo extra para você."
+        f"𖥔 Produto: {display_name}\n\n"
+        f"{price_block}"
+        f"╰┈➤ Confira no {marketplace}: {product.affiliate_url}"
     )
 
 
@@ -120,6 +319,7 @@ class RunResult:
     failures: int = 0
     ai_rejected: int = 0
     ai_failures: int = 0
+    ai_evaluated: int = 0
 
     def to_dict(self) -> dict[str, int]:
         return asdict(self)
@@ -133,18 +333,22 @@ class PromotionService:
         repository: PublicationRepository,
         min_discount_percent: float,
         max_offers_per_run: int,
+        include_non_promotional_products: bool = True,
         record_publications: bool = True,
         curator: ProductCurator | None = None,
         ai_relevance_threshold: int = 75,
+        max_ai_evaluations_per_run: int = 6,
     ) -> None:
         self.providers = providers
         self.publisher = publisher
         self.repository = repository
         self.min_discount_percent = min_discount_percent
+        self.include_non_promotional_products = include_non_promotional_products
         self.max_offers_per_run = max_offers_per_run
         self.record_publications = record_publications
         self.curator = curator
         self.ai_relevance_threshold = ai_relevance_threshold
+        self.max_ai_evaluations_per_run = max_ai_evaluations_per_run
         self._run_lock = asyncio.Lock()
 
     async def run(self) -> RunResult:
@@ -168,9 +372,18 @@ class PromotionService:
                 and product.affiliate_url
                 and product.price > 0
                 and is_technology(product)
-                and product.discount_percent >= self.min_discount_percent
+                and (
+                    self.include_non_promotional_products
+                    or product.discount_percent >= self.min_discount_percent
+                )
             ]
-            eligible.sort(key=lambda item: item.discount_percent, reverse=True)
+            try:
+                rotation_index = int(self.repository.get_state("editorial_rotation", "0"))
+            except ValueError:
+                rotation_index = 0
+            eligible = order_for_editorial_rotation(
+                eligible, self.min_discount_percent, rotation_index
+            )
             result.eligible = len(eligible)
             destinations = self.publisher.destinations()
             for product in eligible:
@@ -192,6 +405,9 @@ class PromotionService:
                     continue
                 curation = None
                 if self.curator:
+                    if result.ai_evaluated >= self.max_ai_evaluations_per_run:
+                        break
+                    result.ai_evaluated += 1
                     try:
                         curation = await self.curator.curate(product)
                     except Exception:
@@ -242,4 +458,10 @@ class PromotionService:
                     )
                 if successful:
                     result.published += 1
+                    if self.record_publications:
+                        self.repository.set_state(
+                            "editorial_rotation",
+                            str((rotation_index + 1) % len(EDITORIAL_ROTATION)),
+                        )
+                    rotation_index = (rotation_index + 1) % len(EDITORIAL_ROTATION)
             return result

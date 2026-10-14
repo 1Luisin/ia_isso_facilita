@@ -50,6 +50,14 @@ class PublicationRepository:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS app_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+                """
+            )
 
     def contains(self, fingerprint: str) -> bool:
         with self._connection() as connection:
@@ -104,3 +112,20 @@ class PublicationRepository:
                 "SELECT * FROM publications ORDER BY id DESC LIMIT ?", (limit,)
             ).fetchall()
         return [dict(row) for row in rows]
+
+    def get_state(self, key: str, default: str = "") -> str:
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT value FROM app_state WHERE key = ?", (key,)
+            ).fetchone()
+        return str(row["value"]) if row else default
+
+    def set_state(self, key: str, value: str) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                """
+                INSERT INTO app_state (key, value) VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (key, value),
+            )

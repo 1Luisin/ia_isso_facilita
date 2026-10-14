@@ -6,11 +6,12 @@ melhores, usar o link de afiliado da plataforma e publicar uma mensagem personal
 O projeto já inclui:
 
 - busca agendada nas duas plataformas;
-- filtro por palavras de tecnologia e desconto mínimo;
-- ranking por desconto;
+- filtro por palavras de tecnologia, com produtos promocionais e de preço regular;
+- alternância entre ofertas e produtos sem promoção para aumentar a variedade;
 - link de afiliado retornado/gerado pela API de cada marketplace;
 - prevenção de publicação duplicada no mesmo preço;
 - curadoria opcional por IA, guiada pela identidade editorial do Isso Facilita;
+- descoberta de figuras e decoração de anime, Sanrio e personagens kawaii;
 - copy com símbolos estéticos sem permitir que a IA altere preço, desconto ou link;
 - publicação automática no Telegram e, opcionalmente, em grupo comum pelo WhatsApp Web;
 - conectores opcionais para WhatsApp Groups API, webhook HTTP ou console;
@@ -59,7 +60,7 @@ Copie `.env.example` para `.env` e altere:
 2. credenciais `SHOPEE_*` e `ALIEXPRESS_*` fornecidas nos portais de afiliados;
 3. `PUBLISHER=telegram,whatsapp_web` para publicar nos dois destinos;
 4. `DRY_RUN=false` somente depois de validar as mensagens;
-5. desconto mínimo, intervalo e limite de posts conforme desejado.
+5. desconto mínimo, inclusão de itens sem promoção, intervalo e limite de posts conforme desejado.
 
 ### Curadoria e descrição por IA
 
@@ -72,8 +73,9 @@ O provedor padrão é o Ollama, que executa a IA localmente e não exige chave n
 pagamento por chamada. No computador que ficará ligado:
 
 1. instale o Ollama para Windows em `https://ollama.com/download/windows`;
-2. execute `ollama pull qwen3:4b` para baixar o modelo;
-3. confirme no `.env` `AI_PROVIDER=ollama` e `OLLAMA_MODEL=qwen3:4b`;
+2. execute `ollama pull qwen3-vl:2b-instruct` para baixar o modelo com visão otimizado para 16 GB de RAM e GTX 1650;
+3. confirme no `.env` `AI_PROVIDER=ollama`, `OLLAMA_MODEL=qwen3-vl:2b-instruct` e
+   `OLLAMA_USE_PRODUCT_IMAGES=true`;
 4. defina `AI_CURATION_ENABLED=true`;
 5. mantenha `DRY_RUN=true` no primeiro teste e revise as decisões.
 
@@ -81,11 +83,18 @@ O Ollama deve permanecer aberto e atender em `http://127.0.0.1:11434`. A opção
 `AI_PROVIDER=openai` continua disponível, mas só deve ser usada com uma
 `OPENAI_API_KEY` válida e créditos ativos.
 
-A IA recebe apenas o marketplace e o título oficial. Ela devolve uma decisão de
-relevância, uma chamada e uma descrição curtas. O código insere separadamente o título
+A IA recebe o marketplace, o título oficial e a imagem principal para identificar o
+objeto vendido antes de escrever. Ela devolve uma decisão de relevância, uma chamada e
+uma descrição curtas. O código insere separadamente o título
 oficial, preço, desconto e link afiliado, e rejeita qualquer copy que tente acrescentar
 números que não existam no título do produto. Se a API de IA falhar, aquele produto não
 é publicado e pode ser tentado novamente depois.
+
+A sequência editorial reserva seis de cada oito posições para setup ou tecnologia,
+uma para Action Figures/colecionáveis de anime e Vocaloid e uma para personagens como
+Sanrio. A rotação fica salva no banco, evitando que descontos altos produzam várias
+publicações do mesmo nicho em seguida. `MAX_AI_EVALUATIONS_PER_RUN` limita quantos itens
+o modelo avalia em cada ciclo para controlar o uso de memória e o tempo de processamento.
 
 ### Telegram e WhatsApp
 
@@ -174,7 +183,7 @@ docker compose up --build -d
 
 - Mantenha `DRY_RUN=true` até revisar as primeiras ofertas.
 - Não publique mais do que os grupos aceitam; ajuste `MAX_OFFERS_PER_RUN` e o intervalo.
-- Identifique mensagens como link de afiliado. O texto padrão já inclui esse aviso.
-- Preços mudam rapidamente; a mensagem informa que o valor deve ser conferido no link.
+- Se necessário, identifique os links de afiliado na descrição fixa do canal ou grupo.
+- Preços mudam rapidamente; confirme o valor no link antes da compra.
 - O SQLite fica em `data/offers.db`; preserve esse volume para manter a deduplicação.
 

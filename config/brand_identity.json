@@ -1,54 +1,239 @@
 {
   "brand_name": "Isso Facilita",
-  "mission": "Encontrar tecnologia útil, acessível e prática que realmente facilite a rotina.",
+  "brand_positioning": "Curadoria de tecnologia, setups, decoração e achadinhos com personalidade.",
+  "mission": "Descobrir produtos bonitos, úteis, criativos e de boa qualidade que melhorem a rotina ou tornem ambientes mais agradáveis. Unir tecnologia, estética e custo-benefício, valorizando setups personalizados, cultura kawaii, decoração alternativa e produtos diferenciados.",
+
   "audience": [
-    "pessoas que gostam de tecnologia sem linguagem complicada",
-    "quem procura economia, praticidade e bons achados",
-    "usuários montando ou melhorando setup, casa conectada e rotina móvel"
+    "Pessoas que gostam de tecnologia e produtos bem construídos",
+    "Fãs de setups bonitos, personalizados e funcionais",
+    "Pessoas que apreciam estética kawaii, Sanrio, anime e cultura geek",
+    "Quem gosta de decoração criativa, aconchegante e alternativa",
+    "Pessoas que procuram produtos diferenciados com preço justo",
+    "Usuários que desejam melhorar o computador, quarto, escritório ou rotina"
   ],
+
   "voice": [
     "amigável",
     "direta",
     "confiável",
     "animada sem exageros",
-    "brasileira e fácil de entender"
+    "brasileira e fácil de entender",
+    "apaixonada por estética e produtos interessantes",
+    "criteriosa ao recomendar produtos"
   ],
+
   "visual_style": {
-    "symbols": ["✿", "⋆｡°✩", "𖥔", "⊹", "✦", "ᯓ★", "╰┈➤"],
+    "symbols": [
+      "✿",
+      "⋆｡°✩",
+      "𖥔",
+      "⊹",
+      "✦",
+      "ᯓ★",
+      "╰┈➤"
+    ],
+    "aesthetics": [
+      "kawaii",
+      "pastel",
+      "cozy",
+      "minimalista",
+      "clean setup",
+      "anime aesthetic",
+      "soft gaming",
+      "dark aesthetic",
+      "retro tech"
+    ],
     "rule": "Use poucos símbolos por mensagem, com boa leitura e sem poluição visual."
   },
+
+  "curation_philosophy": {
+    "main_rule": "Qualidade e identidade visual são mais importantes do que quantidade de produtos encontrados.",
+    "price_rule": "Não escolher automaticamente o produto mais barato. Priorizar preço justo em relação à qualidade comprovada.",
+    "aesthetic_rule": "Valorizar produtos visualmente atraentes, com personalidade ou que combinem com setups e ambientes bem planejados.",
+    "utility_rule": "Produtos tecnológicos devem oferecer funcionalidade real. Produtos decorativos podem ser selecionados exclusivamente por seu valor estético.",
+    "generic_rule": "Evitar produtos genéricos sem características que os diferenciem. Produtos simples são permitidos quando apresentam qualidade, design ou utilidade verificáveis.",
+    "discovery_rule": "Buscar produtos específicos e diferenciados antes de recorrer a pesquisas genéricas.",
+    "diversity_rule": "O foco principal é setup e tecnologia. Intercalar acessórios de PC, periféricos, monitores, áudio, gadgets, Action Figures de anime/Vocaloid e, com menor frequência, itens Sanrio. Nunca publicar uma sequência dominada pelo mesmo personagem, franquia ou tipo de produto."
+  },
+
   "preferred_products": [
+    "teclados mecânicos com bom acabamento e design diferenciado",
+    "teclados compactos 60%, 65%, 75%, TKL e outros formatos",
+    "keycaps kawaii, personalizadas e de materiais duráveis",
+    "mouses ergonômicos, gamers e esteticamente atraentes",
+    "mousepads e deskmats premium com estampas bonitas",
+    "headsets, fones e acessórios de áudio confiáveis",
+    "suportes de monitor, notebook e tablet",
+    "organizadores de cabos e acessórios para setup",
+    "iluminação ambiente, luminárias decorativas e LEDs",
+    "figuras decorativas, miniaturas e acessórios de personagens",
+    "action figures, estátuas e miniaturas de personagens de anime",
+    "figuras, pelúcias e ornamentos de personagens Sanrio",
+    "mascotes e personagens fofos com estética kawaii ou cozy",
+    "produtos oficiais Sanrio e acessórios inspirados na estética kawaii",
+    "decorações de quarto com estética cozy, pastel ou alternativa",
+    "acessórios inspirados em anime e cultura geek",
+    "prateleiras, organizadores e decoração de mesa",
+    "gadgets criativos e realmente funcionais",
     "acessórios úteis para celular, tablet e notebook",
-    "áudio, carregamento e conectividade",
-    "periféricos e melhorias de setup",
-    "armazenamento e componentes de computador",
+    "armazenamento e componentes de computador confiáveis",
     "casa inteligente e automação simples",
-    "wearables e itens que economizam tempo"
+    "wearables e acessórios que economizam tempo"
   ],
+
+  "category_specific_rules": {
+    "keyboards": {
+      "prioritize": [
+        "teclados mecânicos verdadeiros",
+        "switches identificados e especificações claras",
+        "construção e acabamento de boa qualidade",
+        "hot-swap quando disponível e relevante",
+        "keycaps de boa qualidade",
+        "design bonito ou personalizável",
+        "layout e conectividade claramente informados"
+      ],
+      "avoid": [
+        "teclados de membrana anunciados como mecânicos",
+        "teclados genéricos sem especificações suficientes",
+        "RGB usado como único argumento de qualidade",
+        "modelos com problemas recorrentes documentados"
+      ]
+    },
+
+    "keycaps": {
+      "prioritize": [
+        "PBT com dye-sublimation ou double-shot",
+        "boa qualidade de impressão e acabamento",
+        "estampas kawaii, anime, pastel e personalizadas",
+        "kits com compatibilidade documentada",
+        "compatibilidade com switches e layouts informada"
+      ],
+      "avoid": [
+        "kits sem informação de compatibilidade",
+        "material desconhecido apresentado como premium",
+        "estampas com problemas recorrentes de acabamento",
+        "anúncios que confundem keycaps com teclados completos"
+      ]
+    },
+
+    "decoration": {
+      "prioritize": [
+        "decoração kawaii, cozy e alternativa",
+        "produtos com acabamento visual bem executado",
+        "luminárias e objetos decorativos criativos",
+        "figuras, miniaturas e organizadores bonitos",
+        "itens que harmonizem com quartos e setups",
+        "materiais e dimensões claramente informados"
+      ],
+      "important": "Decoração não precisa possuir função tecnológica para ser recomendada."
+    },
+
+    "technology": {
+      "prioritize": [
+        "fabricantes e modelos identificáveis",
+        "especificações verificáveis",
+        "compatibilidade clara",
+        "avaliações confiáveis quando disponíveis",
+        "boa relação entre preço e funcionalidades",
+        "design atraente quando possível"
+      ],
+      "avoid": [
+        "promessas técnicas não verificadas",
+        "produtos com especificações contraditórias",
+        "acessórios com riscos de segurança conhecidos",
+        "itens cuja qualidade não possa ser avaliada"
+      ]
+    }
+  },
+
+  "selection_policy": {
+    "quality_first": true,
+    "aesthetic_matters": true,
+    "lowest_price_first": false,
+    "allow_pure_decoration": true,
+    "allow_premium_products": true,
+    "avoid_repetition": true,
+    "rules": [
+      "Verifique se o produto pertence ao universo da marca.",
+      "Procure características que diferenciem o produto.",
+      "Confira materiais, especificações e compatibilidade quando relevantes.",
+      "Considere reputação do vendedor e avaliações apenas quando houver dados confiáveis.",
+      "Não confunda popularidade com qualidade.",
+      "Não confunda preço alto com qualidade.",
+      "Se houver evidências insuficientes de qualidade, marque o produto como pendente de verificação.",
+      "Figuras e itens decorativos de anime, Sanrio ou personagens fofos podem ser aceitos mesmo sem função tecnológica.",
+      "Rejeite figuras com conteúdo adulto, sexualizado, grotesco, gore ou violência explícita.",
+      "Não declare que um produto é premium sem evidências.",
+      "Entre dois produtos de qualidade equivalente, prefira o mais interessante visualmente ou com melhor custo-benefício."
+    ]
+  },
+
   "reject_products": [
-    "itens que só usam palavras tecnológicas por coincidência",
-    "brinquedos, decoração, moda e colecionáveis sem função tecnológica clara",
-    "produtos com promessa médica ou de segurança não verificável",
-    "ofertas confusas, enganosas ou sem utilidade evidente para o público"
+    "produtos genéricos sem diferencial relevante",
+    "falsificações e produtos que se passam por marcas oficiais",
+    "eletrônicos com riscos de segurança conhecidos",
+    "periféricos com especificações enganosas",
+    "produtos cuja descrição contradiz suas características",
+    "figuras ou personagens com conteúdo adulto, sexualizado, grotesco, gore ou violência explícita",
+    "itens com promessas médicas não verificáveis",
+    "anúncios com informações essenciais insuficientes",
+    "produtos de qualidade comprovadamente ruim",
+    "ofertas enganosas ou confusas",
+    "produtos sem relação com os interesses do público"
   ],
+
   "copy_rules": [
     "Nunca invente especificações, compatibilidade, avaliações ou benefícios.",
     "Não escreva preço, desconto, link ou nome do marketplace: o sistema adiciona esses campos.",
-    "Use apenas fatos explícitos no título oficial do produto.",
+    "Use apenas fatos verificáveis nos dados oficiais do produto fornecidos ao modelo.",
+    "Se apenas o título oficial estiver disponível, não acrescente especificações ausentes do título.",
+    "Não afirme que um produto é premium, durável ou de alta qualidade sem evidências.",
+    "Destaque características reais e diferenciais interessantes.",
+    "A palavra kawaii é apenas um critério interno de busca e nunca deve aparecer no texto publicado.",
+    "Chame colecionáveis tridimensionais de Figure ou Action Figure; não use figura como nome editorial do item.",
+    "Identifique primeiro o objeto vendido. Ímã, calendário, suporte, chaveiro e acessório não devem ser chamados de Figure só por terem um personagem estampado.",
+    "Evite frases genéricas como toque de fofura, mais personalidade e deixar seu cantinho.",
     "A chamada deve ter no máximo 90 caracteres.",
     "A descrição deve ter no máximo 220 caracteres e uma ou duas frases.",
-    "Evite urgência falsa, promessas absolutas e excesso de emojis."
+    "Evite urgência falsa, promessas absolutas e excesso de emojis.",
+    "Não apresente produtos inspirados em personagens como oficiais ou licenciados sem confirmação."
   ],
+
   "examples": [
     {
-      "product": "Fones de ouvido Bluetooth sem fio com gancho ajustável",
-      "headline": "Som e liberdade para acompanhar sua rotina ✦",
-      "description": "Um achadinho prático para quem quer ouvir música com mais mobilidade no dia a dia."
+      "product": "Teclado mecânico 75% hot-swap com keycaps PBT",
+      "headline": "Um teclado bonito que merece destaque no seu setup ✿",
+      "description": "Formato compacto de 75%, hot-swap e keycaps PBT para quem gosta de personalizar cada detalhe do setup."
     },
     {
-      "product": "Estação de carregamento magnético para dispositivos Apple",
-      "headline": "Menos cabos, mais praticidade no seu cantinho tech 𖥔",
-      "description": "Uma opção organizada para reunir o carregamento dos seus dispositivos compatíveis."
+      "product": "Kit de keycaps PBT dye-sub pastel compatível com switches MX",
+      "headline": "Um toque de fofura para transformar seu teclado 𖥔",
+      "description": "Keycaps em tons pastel, com material PBT e legendas dye-sub, para personalizar teclados compatíveis."
+    },
+    {
+      "product": "Luminária decorativa LED em formato de nuvem USB",
+      "headline": "Uma nuvenzinha iluminada para seu cantinho ☁",
+      "description": "Luminária LED em formato de nuvem com alimentação USB. Um detalhe fofo para decorar sua mesa ou quarto."
+    },
+    {
+      "product": "Deskmat estampado com bordas costuradas",
+      "headline": "Sua mesa também merece personalidade ✦",
+      "description": "Um deskmat estampado com bordas costuradas para complementar a decoração do seu setup."
+    },
+    {
+      "product": "Mini calendário Hello Kitty com base que funciona como suporte para celular",
+      "headline": "Hello Kitty ajudando a organizar a mesa ✿",
+      "description": "Mini calendário da Hello Kitty com suporte para celular integrado à base."
+    },
+    {
+      "product": "Action figure Hatsune Miku 25 cm",
+      "headline": "Hatsune Miku em destaque na coleção ✦",
+      "description": "Action Figure da Hatsune Miku com 25 cm para fãs de Vocaloid."
+    },
+    {
+      "product": "Ímã de geladeira Hello Kitty",
+      "headline": "Hello Kitty nos pequenos detalhes da decoração ✿",
+      "description": "Ímã de geladeira da Hello Kitty para decorar superfícies metálicas."
     }
   ]
 }

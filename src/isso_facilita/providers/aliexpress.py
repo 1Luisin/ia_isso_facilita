@@ -27,6 +27,10 @@ def sign_top_request(params: dict[str, str], secret: str) -> str:
 
 class AliExpressProvider(MarketplaceProvider):
     name = "aliexpress"
+    query_methods = (
+        "aliexpress.affiliate.hotproduct.query",
+        "aliexpress.affiliate.product.query",
+    )
 
     def __init__(self, settings: Settings) -> None:
         required = (
@@ -60,6 +64,35 @@ class AliExpressProvider(MarketplaceProvider):
         return list(unique.values())
 
     async def _discover_keyword(self, keyword: str) -> list[Product]:
+        batches = await asyncio.gather(
+            *(self._query_keyword(keyword, method) for method in self.query_methods),
+            return_exceptions=True,
+        )
+        raw_products: dict[str, dict[str, object]] = {}
+        errors: list[BaseException] = []
+        for batch in batches:
+            if isinstance(batch, BaseException):
+                errors.append(batch)
+                logger.warning("Consulta complementar do AliExpress falhou: %s", batch)
+                continue
+            for item in batch:
+                product_id = str(item.get("product_id", ""))
+                if product_id:
+                    raw_products[product_id] = item
+        if not raw_products and errors:
+            raise RuntimeError(
+                f"Todas as consultas do AliExpress falharam: {errors[0]}"
+            ) from errors[0]
+        items = list(raw_products.values())
+        short_links = await self._generate_short_links(items)
+        return [
+            self._to_product(item, short_links.get(str(item.get("product_id", ""))))
+            for item in items
+        ]
+
+    async def _query_keyword(
+        self, keyword: str, method: str
+    ) -> list[dict[str, object]]:
         timestamp = datetime.now(timezone(timedelta(hours=8))).strftime("%Y-%m-%d %H:%M:%S")
         params = {
             "app_key": self.app_key,
@@ -68,7 +101,7 @@ class AliExpressProvider(MarketplaceProvider):
                 "promotion_link,target_sale_price,target_original_price,target_sale_price_currency"
             ),
             "format": "json",
-            "method": "aliexpress.affiliate.hotproduct.query",
+            "method": method,
             "keywords": keyword,
             "page_no": "1",
             "page_size": "20",
@@ -99,12 +132,7 @@ class AliExpressProvider(MarketplaceProvider):
         if str(envelope.get("resp_code", "200")) != "200":
             raise RuntimeError(f"AliExpress rejeitou a consulta: {envelope}")
         result = envelope.get("result", {})
-        raw_products = result.get("products", {}).get("product", []) or []
-        short_links = await self._generate_short_links(raw_products)
-        return [
-            self._to_product(item, short_links.get(str(item.get("product_id", ""))))
-            for item in raw_products
-        ]
+        return result.get("products", {}).get("product", []) or []
 
     async def _generate_short_links(
         self, items: list[dict[str, object]]

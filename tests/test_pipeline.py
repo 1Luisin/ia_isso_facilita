@@ -28,6 +28,24 @@ class FakeProvider(MarketplaceProvider):
         ]
 
 
+class FakeMixedProvider(MarketplaceProvider):
+    name = "mixed"
+
+    async def discover(self) -> list[Product]:
+        promotional = (await FakeProvider().discover())[0]
+        regular = Product(
+            marketplace="aliexpress",
+            product_id="regular-1",
+            title="Fones Bluetooth com gancho ajustável",
+            product_url="https://example.com/regular",
+            affiliate_url="https://example.com/regular-affiliate",
+            image_url="",
+            price=Decimal("150"),
+            original_price=Decimal("150"),
+        )
+        return [regular, promotional]
+
+
 class FakePublisher(Publisher):
     def __init__(self) -> None:
         self.messages: list[str] = []
@@ -160,3 +178,23 @@ async def test_retries_only_destination_that_failed(tmp_path) -> None:
     assert third.duplicates == 1
     assert len(successful.messages) == 1
     assert failing.calls == 2
+
+
+@pytest.mark.asyncio
+async def test_pipeline_includes_and_interleaves_regular_price_products(tmp_path) -> None:
+    publisher = FakePublisher()
+    service = PromotionService(
+        providers=[FakeMixedProvider()],
+        publisher=publisher,
+        repository=PublicationRepository(tmp_path / "offers.db"),
+        min_discount_percent=20,
+        max_offers_per_run=2,
+        include_non_promotional_products=True,
+    )
+
+    result = await service.run()
+
+    assert result.eligible == 2
+    assert result.published == 2
+    assert "25% OFF" in publisher.messages[0]
+    assert "✦ Preço: R$ 150,00" in publisher.messages[1]
