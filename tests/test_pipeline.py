@@ -6,7 +6,7 @@ from isso_facilita.db import PublicationRepository
 from isso_facilita.models import Product
 from isso_facilita.providers.base import MarketplaceProvider
 from isso_facilita.publishers.base import MultiPublisher, Publisher
-from isso_facilita.service import PromotionService
+from isso_facilita.service import PromotionService, is_technology
 
 
 class FakeProvider(MarketplaceProvider):
@@ -46,6 +46,21 @@ class FailingPublisher(Publisher):
         self.calls += 1
         if self.should_fail:
             raise RuntimeError("indisponível")
+
+
+def test_technology_filter_rejects_tarot_with_mouse_in_title() -> None:
+    item = Product(
+        marketplace="aliexpress",
+        product_id="tarot",
+        title="Baralho de tarô Mimi Mouse, oracle, jogo de mesa",
+        product_url="https://example.com/product",
+        affiliate_url="https://example.com/affiliate",
+        image_url="",
+        price=Decimal("20"),
+        original_price=Decimal("40"),
+    )
+
+    assert not is_technology(item)
 
 
 @pytest.mark.asyncio

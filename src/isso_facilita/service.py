@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 import unicodedata
 from dataclasses import asdict, dataclass
 from decimal import Decimal
@@ -49,6 +50,18 @@ TECH_KEYWORDS = {
     "pendrive",
 }
 
+NON_TECH_KEYWORDS = {
+    "baralho",
+    "board game",
+    "disney",
+    "jogo de mesa",
+    "mickey mouse",
+    "mimi mouse",
+    "minnie mouse",
+    "oracle",
+    "tarot",
+}
+
 
 def normalize(text: str) -> str:
     return "".join(
@@ -60,7 +73,12 @@ def normalize(text: str) -> str:
 
 def is_technology(product: Product) -> bool:
     title = normalize(product.title)
-    return any(keyword in title for keyword in TECH_KEYWORDS)
+    if any(keyword in title for keyword in NON_TECH_KEYWORDS):
+        return False
+    return any(
+        re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", title)
+        for keyword in TECH_KEYWORDS
+    )
 
 
 def format_money(value: Decimal, currency: str) -> str:
