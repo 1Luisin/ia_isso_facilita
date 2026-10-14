@@ -5,7 +5,8 @@
   "description": "Ponte local e não oficial entre o Isso Facilita e o WhatsApp Web",
   "main": "src/server.js",
   "scripts": {
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "postinstall": "patch-package"
   },
   "engines": {
     "node": ">=18"
@@ -18,5 +19,8 @@
   },
   "overrides": {
     "puppeteer": "25.13.0"
+  },
+  "devDependencies": {
+    "patch-package": "8.0.1"
   }
 }
