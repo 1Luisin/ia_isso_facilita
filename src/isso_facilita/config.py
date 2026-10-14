@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,8 +19,12 @@ class Settings(BaseSettings):
     bot_api_token: str = ""
 
     ai_curation_enabled: bool = False
+    ai_provider: Literal["ollama", "openai"] = "ollama"
     ai_relevance_threshold: int = Field(default=75, ge=0, le=100)
     brand_identity_path: Path = Path("config/brand_identity.json")
+    ollama_model: str = "qwen3:4b"
+    ollama_api_url: str = "http://127.0.0.1:11434"
+    ollama_timeout_seconds: float = Field(default=180, ge=10, le=600)
     openai_api_key: str = ""
     openai_model: str = "gpt-6-luna"
     openai_api_url: str = "https://api.openai.com/v1"
@@ -64,6 +69,10 @@ class Settings(BaseSettings):
     @property
     def publisher_names(self) -> list[str]:
         return self.publisher.split(",")
+
+    @property
+    def ai_model(self) -> str:
+        return self.ollama_model if self.ai_provider == "ollama" else self.openai_model
 
 
 @lru_cache

@@ -68,13 +68,18 @@ público, tom de voz, símbolos, categorias desejadas, rejeições e exemplos de
 maioria dos casos, ajustar esse perfil e os exemplos é mais simples e econômico do que
 treinar um modelo próprio.
 
-Para ativar:
+O provedor padrão é o Ollama, que executa a IA localmente e não exige chave nem
+pagamento por chamada. No computador que ficará ligado:
 
-1. crie uma chave de projeto na plataforma da OpenAI;
-2. salve-a somente como `OPENAI_API_KEY` no `.env`;
-3. mantenha `OPENAI_MODEL=gpt-6-luna` para uma tarefa frequente e de baixo custo;
+1. instale o Ollama para Windows em `https://ollama.com/download/windows`;
+2. execute `ollama pull qwen3:4b` para baixar o modelo;
+3. confirme no `.env` `AI_PROVIDER=ollama` e `OLLAMA_MODEL=qwen3:4b`;
 4. defina `AI_CURATION_ENABLED=true`;
-5. rode primeiro com `DRY_RUN=true` e revise as decisões.
+5. mantenha `DRY_RUN=true` no primeiro teste e revise as decisões.
+
+O Ollama deve permanecer aberto e atender em `http://127.0.0.1:11434`. A opção
+`AI_PROVIDER=openai` continua disponível, mas só deve ser usada com uma
+`OPENAI_API_KEY` válida e créditos ativos.
 
 A IA recebe apenas o marketplace e o título oficial. Ela devolve uma decisão de
 relevância, uma chamada e uma descrição curtas. O código insere separadamente o título

@@ -1,5 +1,5 @@
 from isso_facilita.config import Settings
-from isso_facilita.curation import OpenAICurator
+from isso_facilita.curation import OllamaCurator, OpenAICurator
 from isso_facilita.db import PublicationRepository
 from isso_facilita.providers import build_providers
 from isso_facilita.publishers import build_publisher
@@ -9,13 +9,21 @@ from isso_facilita.service import PromotionService
 def build_service(settings: Settings) -> PromotionService:
     curator = None
     if settings.ai_curation_enabled:
-        curator = OpenAICurator(
-            api_key=settings.openai_api_key,
-            model=settings.openai_model,
-            identity_path=settings.brand_identity_path,
-            api_url=settings.openai_api_url,
-            timeout_seconds=settings.openai_timeout_seconds,
-        )
+        if settings.ai_provider == "ollama":
+            curator = OllamaCurator(
+                model=settings.ollama_model,
+                identity_path=settings.brand_identity_path,
+                api_url=settings.ollama_api_url,
+                timeout_seconds=settings.ollama_timeout_seconds,
+            )
+        else:
+            curator = OpenAICurator(
+                api_key=settings.openai_api_key,
+                model=settings.openai_model,
+                identity_path=settings.brand_identity_path,
+                api_url=settings.openai_api_url,
+                timeout_seconds=settings.openai_timeout_seconds,
+            )
     return PromotionService(
         providers=build_providers(settings),
         publisher=build_publisher(settings),
