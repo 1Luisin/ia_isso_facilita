@@ -121,6 +121,8 @@ async def health() -> dict[str, object]:
         "marketplaces": settings.marketplace_names,
         "publisher": "console" if settings.dry_run else settings.publisher,
         "dry_run": settings.dry_run,
+        "ai_curation": settings.ai_curation_enabled,
+        "ai_model": settings.openai_model if settings.ai_curation_enabled else None,
     }
 
 

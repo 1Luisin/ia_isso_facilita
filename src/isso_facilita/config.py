@@ -17,6 +17,14 @@ class Settings(BaseSettings):
     database_path: Path = Path("data/offers.db")
     bot_api_token: str = ""
 
+    ai_curation_enabled: bool = False
+    ai_relevance_threshold: int = Field(default=75, ge=0, le=100)
+    brand_identity_path: Path = Path("config/brand_identity.json")
+    openai_api_key: str = ""
+    openai_model: str = "gpt-6-luna"
+    openai_api_url: str = "https://api.openai.com/v1"
+    openai_timeout_seconds: float = Field(default=45, ge=5, le=180)
+
     shopee_app_id: str = ""
     shopee_secret: str = ""
     shopee_api_url: str = "https://open-api.affiliate.shopee.com.br/graphql"

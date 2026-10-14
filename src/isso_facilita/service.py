@@ -5,6 +5,7 @@ import unicodedata
 from dataclasses import asdict, dataclass
 from decimal import Decimal
 
+from isso_facilita.curation import CurationResult, ProductCurator
 from isso_facilita.db import PublicationRepository
 from isso_facilita.models import Product, Publication
 from isso_facilita.providers.base import MarketplaceProvider
@@ -88,18 +89,25 @@ def format_money(value: Decimal, currency: str) -> str:
     return f"{currency.upper()} {value:.2f}"
 
 
-def compose_message(product: Product) -> str:
+def compose_message(product: Product, curation: CurationResult | None = None) -> str:
     marketplace = product.marketplace.title()
     discount = round(product.discount_percent)
     old_price = format_money(product.original_price, product.currency)
     price = format_money(product.price, product.currency)
+    editorial = ""
+    if curation:
+        editorial = f"{curation.headline}\n{curation.description}\n\n"
     return (
-        f"🔥 OFERTA DE TECNOLOGIA — {marketplace}\n\n"
-        f"{product.title}\n\n"
-        f"De {old_price} por {price} ({discount}% OFF)\n\n"
-        f"🛒 Confira a oferta: {product.affiliate_url}\n\n"
-        "⚠️ Preço e estoque podem mudar a qualquer momento. "
-        "Este é um link de afiliado: podemos receber uma comissão sem custo extra para você."
+        "✿ ISSO FACILITA ✿\n"
+        "⋆｡°✩ achadinho tech ✩°｡⋆\n\n"
+        f"{editorial}"
+        f"𖥔 Produto: {product.title}\n\n"
+        f"⊹ De: {old_price}\n"
+        f"✦ Por: {price}\n"
+        f"ᯓ★ Desconto: {discount}% OFF\n\n"
+        f"╰┈➤ Confira no {marketplace}: {product.affiliate_url}\n\n"
+        "⚠️ Preço e estoque podem mudar. Link de afiliado: podemos receber "
+        "uma comissão sem custo extra para você."
     )
 
 
@@ -110,6 +118,8 @@ class RunResult:
     published: int = 0
     duplicates: int = 0
     failures: int = 0
+    ai_rejected: int = 0
+    ai_failures: int = 0
 
     def to_dict(self) -> dict[str, int]:
         return asdict(self)
@@ -124,6 +134,8 @@ class PromotionService:
         min_discount_percent: float,
         max_offers_per_run: int,
         record_publications: bool = True,
+        curator: ProductCurator | None = None,
+        ai_relevance_threshold: int = 75,
     ) -> None:
         self.providers = providers
         self.publisher = publisher
@@ -131,6 +143,8 @@ class PromotionService:
         self.min_discount_percent = min_discount_percent
         self.max_offers_per_run = max_offers_per_run
         self.record_publications = record_publications
+        self.curator = curator
+        self.ai_relevance_threshold = ai_relevance_threshold
         self._run_lock = asyncio.Lock()
 
     async def run(self) -> RunResult:
@@ -176,7 +190,26 @@ class PromotionService:
                 if not pending:
                     result.duplicates += 1
                     continue
-                message = compose_message(product)
+                curation = None
+                if self.curator:
+                    try:
+                        curation = await self.curator.curate(product)
+                    except Exception:
+                        result.failures += 1
+                        result.ai_failures += 1
+                        logger.exception(
+                            "Falha na curadoria por IA de %s:%s",
+                            product.marketplace,
+                            product.product_id,
+                        )
+                        continue
+                    if (
+                        not curation.relevant
+                        or curation.relevance_score < self.ai_relevance_threshold
+                    ):
+                        result.ai_rejected += 1
+                        continue
+                message = compose_message(product, curation)
                 successful = 0
                 for publisher in pending:
                     try:

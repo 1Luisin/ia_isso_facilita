@@ -10,6 +10,8 @@ O projeto já inclui:
 - ranking por desconto;
 - link de afiliado retornado/gerado pela API de cada marketplace;
 - prevenção de publicação duplicada no mesmo preço;
+- curadoria opcional por IA, guiada pela identidade editorial do Isso Facilita;
+- copy com símbolos estéticos sem permitir que a IA altere preço, desconto ou link;
 - publicação automática no Telegram e, opcionalmente, em grupo comum pelo WhatsApp Web;
 - conectores opcionais para WhatsApp Groups API, webhook HTTP ou console;
 - modo de demonstração, sem credenciais e sem postagem real;
@@ -58,6 +60,27 @@ Copie `.env.example` para `.env` e altere:
 3. `PUBLISHER=telegram,whatsapp_web` para publicar nos dois destinos;
 4. `DRY_RUN=false` somente depois de validar as mensagens;
 5. desconto mínimo, intervalo e limite de posts conforme desejado.
+
+### Curadoria e descrição por IA
+
+A identidade da página fica em `config/brand_identity.json`. Esse arquivo define missão,
+público, tom de voz, símbolos, categorias desejadas, rejeições e exemplos de texto. Na
+maioria dos casos, ajustar esse perfil e os exemplos é mais simples e econômico do que
+treinar um modelo próprio.
+
+Para ativar:
+
+1. crie uma chave de projeto na plataforma da OpenAI;
+2. salve-a somente como `OPENAI_API_KEY` no `.env`;
+3. mantenha `OPENAI_MODEL=gpt-6-luna` para uma tarefa frequente e de baixo custo;
+4. defina `AI_CURATION_ENABLED=true`;
+5. rode primeiro com `DRY_RUN=true` e revise as decisões.
+
+A IA recebe apenas o marketplace e o título oficial. Ela devolve uma decisão de
+relevância, uma chamada e uma descrição curtas. O código insere separadamente o título
+oficial, preço, desconto e link afiliado, e rejeita qualquer copy que tente acrescentar
+números que não existam no título do produto. Se a API de IA falhar, aquele produto não
+é publicado e pode ser tentado novamente depois.
 
 ### Telegram e WhatsApp
 

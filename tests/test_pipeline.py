@@ -2,6 +2,7 @@ from decimal import Decimal
 
 import pytest
 
+from isso_facilita.curation import CurationResult
 from isso_facilita.db import PublicationRepository
 from isso_facilita.models import Product
 from isso_facilita.providers.base import MarketplaceProvider
@@ -48,6 +49,17 @@ class FailingPublisher(Publisher):
             raise RuntimeError("indisponível")
 
 
+class RejectingCurator:
+    async def curate(self, product: Product) -> CurationResult:
+        return CurationResult(
+            relevant=False,
+            relevance_score=20,
+            headline="",
+            description="",
+            reason=f"{product.title} não combina com a página",
+        )
+
+
 def test_technology_filter_rejects_tarot_with_mouse_in_title() -> None:
     item = Product(
         marketplace="aliexpress",
@@ -61,6 +73,26 @@ def test_technology_filter_rejects_tarot_with_mouse_in_title() -> None:
     )
 
     assert not is_technology(item)
+
+
+@pytest.mark.asyncio
+async def test_ai_curation_can_reject_a_keyword_match(tmp_path) -> None:
+    publisher = FakePublisher()
+    service = PromotionService(
+        providers=[FakeProvider()],
+        publisher=publisher,
+        repository=PublicationRepository(tmp_path / "offers.db"),
+        min_discount_percent=20,
+        max_offers_per_run=5,
+        curator=RejectingCurator(),
+        ai_relevance_threshold=75,
+    )
+
+    result = await service.run()
+
+    assert result.published == 0
+    assert result.ai_rejected == 1
+    assert publisher.messages == []
 
 
 @pytest.mark.asyncio

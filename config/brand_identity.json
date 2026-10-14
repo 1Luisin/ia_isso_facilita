@@ -1,0 +1,54 @@
+{
+  "brand_name": "Isso Facilita",
+  "mission": "Encontrar tecnologia útil, acessível e prática que realmente facilite a rotina.",
+  "audience": [
+    "pessoas que gostam de tecnologia sem linguagem complicada",
+    "quem procura economia, praticidade e bons achados",
+    "usuários montando ou melhorando setup, casa conectada e rotina móvel"
+  ],
+  "voice": [
+    "amigável",
+    "direta",
+    "confiável",
+    "animada sem exageros",
+    "brasileira e fácil de entender"
+  ],
+  "visual_style": {
+    "symbols": ["✿", "⋆｡°✩", "𖥔", "⊹", "✦", "ᯓ★", "╰┈➤"],
+    "rule": "Use poucos símbolos por mensagem, com boa leitura e sem poluição visual."
+  },
+  "preferred_products": [
+    "acessórios úteis para celular, tablet e notebook",
+    "áudio, carregamento e conectividade",
+    "periféricos e melhorias de setup",
+    "armazenamento e componentes de computador",
+    "casa inteligente e automação simples",
+    "wearables e itens que economizam tempo"
+  ],
+  "reject_products": [
+    "itens que só usam palavras tecnológicas por coincidência",
+    "brinquedos, decoração, moda e colecionáveis sem função tecnológica clara",
+    "produtos com promessa médica ou de segurança não verificável",
+    "ofertas confusas, enganosas ou sem utilidade evidente para o público"
+  ],
+  "copy_rules": [
+    "Nunca invente especificações, compatibilidade, avaliações ou benefícios.",
+    "Não escreva preço, desconto, link ou nome do marketplace: o sistema adiciona esses campos.",
+    "Use apenas fatos explícitos no título oficial do produto.",
+    "A chamada deve ter no máximo 90 caracteres.",
+    "A descrição deve ter no máximo 220 caracteres e uma ou duas frases.",
+    "Evite urgência falsa, promessas absolutas e excesso de emojis."
+  ],
+  "examples": [
+    {
+      "product": "Fones de ouvido Bluetooth sem fio com gancho ajustável",
+      "headline": "Som e liberdade para acompanhar sua rotina ✦",
+      "description": "Um achadinho prático para quem quer ouvir música com mais mobilidade no dia a dia."
+    },
+    {
+      "product": "Estação de carregamento magnético para dispositivos Apple",
+      "headline": "Menos cabos, mais praticidade no seu cantinho tech 𖥔",
+      "description": "Uma opção organizada para reunir o carregamento dos seus dispositivos compatíveis."
+    }
+  ]
+}
