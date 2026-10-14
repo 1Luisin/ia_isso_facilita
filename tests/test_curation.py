@@ -128,10 +128,12 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
         assert payload["stream"] is False
         assert payload["think"] is False
         assert payload["format"]["type"] == "object"
+        assert "relevance_score" not in payload["format"]["properties"]
         assert payload["options"]["temperature"] == 0
         serialized = json.dumps(payload, ensure_ascii=False)
         assert "132.59" not in serialized
         assert "_short" not in serialized
+        assert "Aparência é um diferencial" in serialized
         return httpx.Response(
             200,
             json={
@@ -140,7 +142,6 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
                     "content": json.dumps(
                         {
                             "relevant": True,
-                            "relevance_score": 92,
                             "headline": "Som prático para acompanhar sua rotina ✦",
                             "description": "Um achadinho sem fio e fácil de usar no dia a dia.",
                             "reason": "O produto combina com a identidade da página.",
@@ -160,7 +161,7 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
     result = await curator.curate(product())
 
     assert result.relevant
-    assert result.relevance_score == 92
+    assert result.relevance_score == 100
     assert result.headline.endswith("✦")
 
 
