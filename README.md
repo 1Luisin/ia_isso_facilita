@@ -116,6 +116,11 @@ pontuação e motivo de cada produto aceito ou recusado. Selecione uma linha par
 detalhes ou abrir o link afiliado. O histórico começa a ser armazenado localmente em
 `data/ai-curation.jsonl` depois desta versão e não é enviado ao Git.
 
+O bloco **Serviços e memória** controla o conjunto completo. **PARAR TUDO** encerra o
+bot, a ponte/Chromium dedicado do WhatsApp e o Ollama com o modelo carregado, liberando
+a memória sem apagar sessão, banco ou configurações. **INICIAR TUDO** restaura esses
+três serviços e respeita o estado atual de `AI_CURATION_ENABLED`.
+
 Para remover apenas os atalhos:
 
 ```powershell

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import threading
 import time
@@ -19,6 +20,8 @@ from isso_facilita.ai_audit import read_ai_decisions
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_PATH = PROJECT_ROOT / ".env"
 BOT_URL = "http://127.0.0.1:8000/health"
+OLLAMA_URL = "http://127.0.0.1:11434/api/tags"
+WHATSAPP_URL = "http://127.0.0.1:3001/health"
 BOT_MODULE = "isso_facilita.app:app"
 ENV_KEY = "AI_CURATION_ENABLED"
 _ENV_LINE = re.compile(
@@ -87,6 +90,22 @@ def get_bot_health(timeout: float = 1.5) -> dict[str, object] | None:
     return payload if isinstance(payload, dict) else None
 
 
+def is_url_available(url: str, timeout: float = 0.5) -> bool:
+    try:
+        with urlopen(url, timeout=timeout) as response:  # noqa: S310 - fixed localhost URLs
+            return 200 <= response.status < 500
+    except (OSError, URLError, ValueError):
+        return False
+
+
+def get_service_statuses(timeout: float = 0.5) -> dict[str, bool]:
+    return {
+        "bot": get_bot_health(timeout) is not None,
+        "whatsapp": is_url_available(WHATSAPP_URL, timeout),
+        "ollama": is_url_available(OLLAMA_URL, timeout),
+    }
+
+
 def _powershell_process_ids(project_root: Path = PROJECT_ROOT) -> list[int]:
     script = (
         "$root = $env:ISSO_FACILITA_PROJECT_ROOT; "
@@ -121,6 +140,150 @@ def stop_bot(project_root: Path = PROJECT_ROOT) -> None:
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             timeout=15,
         )
+
+
+def _listener_processes(port: int) -> list[tuple[int, str]]:
+    script = (
+        f"Get-NetTCPConnection -State Listen -LocalPort {port} -ErrorAction SilentlyContinue | "
+        "Select-Object -ExpandProperty OwningProcess -Unique | "
+        "ForEach-Object { $process = Get-CimInstance Win32_Process "
+        "-Filter ('ProcessId = ' + $_); "
+        "if ($process) { Write-Output ($process.ProcessId.ToString() + '|' + $process.Name) } }"
+    )
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+        capture_output=True,
+        check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        text=True,
+        timeout=10,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"Não foi possível verificar o serviço local na porta {port}.")
+    processes: list[tuple[int, str]] = []
+    for line in result.stdout.splitlines():
+        process_id, separator, name = line.strip().partition("|")
+        if separator and process_id.isdigit():
+            processes.append((int(process_id), name.strip().lower()))
+    return processes
+
+
+def _stop_listener_service(port: int, expected_processes: set[str]) -> None:
+    for process_id, process_name in _listener_processes(port):
+        if process_name not in expected_processes:
+            raise RuntimeError(
+                f"A porta {port} pertence a um processo inesperado ({process_name}); "
+                "ele não foi encerrado."
+            )
+        subprocess.run(
+            ["taskkill.exe", "/PID", str(process_id), "/T", "/F"],
+            capture_output=True,
+            check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            timeout=20,
+        )
+
+
+def stop_everything(timeout: float = 15) -> dict[str, bool]:
+    errors: list[str] = []
+    for action in (
+        stop_bot,
+        lambda: _stop_listener_service(3001, {"node.exe"}),
+        lambda: _stop_listener_service(11434, {"ollama.exe"}),
+    ):
+        try:
+            action()
+        except Exception as error:
+            errors.append(str(error))
+
+    deadline = time.monotonic() + timeout
+    statuses = get_service_statuses()
+    while any(statuses.values()) and time.monotonic() < deadline:
+        time.sleep(0.35)
+        statuses = get_service_statuses()
+    if errors:
+        raise RuntimeError(" ".join(errors))
+    if any(statuses.values()):
+        active = ", ".join(name for name, running in statuses.items() if running)
+        raise TimeoutError(f"Estes serviços não encerraram a tempo: {active}.")
+    return statuses
+
+
+def _detached_flags() -> int:
+    return (
+        getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+        | getattr(subprocess, "DETACHED_PROCESS", 0)
+        | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    )
+
+
+def _start_detached(
+    command: list[str],
+    working_directory: Path,
+    log_path: Path,
+) -> None:
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    with log_path.open("a", encoding="utf-8") as log_file:
+        subprocess.Popen(  # noqa: S603 - validated local executables and fixed arguments
+            command,
+            cwd=working_directory,
+            stdin=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            close_fds=True,
+            creationflags=_detached_flags(),
+        )
+
+
+def _wait_for_url(url: str, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if is_url_available(url):
+            return
+        time.sleep(0.4)
+    raise TimeoutError(f"O serviço local {url} não iniciou a tempo.")
+
+
+def start_ollama(project_root: Path = PROJECT_ROOT) -> None:
+    if is_url_available(OLLAMA_URL):
+        return
+    default_path = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Ollama" / "ollama.exe"
+    executable = shutil.which("ollama") or (str(default_path) if default_path.exists() else "")
+    if not executable:
+        raise FileNotFoundError("O executável do Ollama não foi encontrado.")
+    _start_detached(
+        [executable, "serve"],
+        project_root,
+        project_root / "data" / "ollama-desktop.log",
+    )
+    _wait_for_url(OLLAMA_URL, 20)
+
+
+def start_whatsapp(project_root: Path = PROJECT_ROOT) -> None:
+    if is_url_available(WHATSAPP_URL):
+        return
+    default_path = Path(os.environ.get("ProgramFiles", "C:\\Program Files")) / "nodejs" / "node.exe"
+    executable = shutil.which("node") or (str(default_path) if default_path.exists() else "")
+    server = project_root / "whatsapp-web-bridge" / "src" / "server.js"
+    if not executable:
+        raise FileNotFoundError("O executável do Node.js não foi encontrado.")
+    if not server.exists():
+        raise FileNotFoundError(f"Ponte do WhatsApp não encontrada: {server}")
+    _start_detached(
+        [executable, str(server)],
+        server.parents[1],
+        project_root / "data" / "whatsapp-desktop.log",
+    )
+    _wait_for_url(WHATSAPP_URL, 30)
+
+
+def start_everything(project_root: Path = PROJECT_ROOT) -> dict[str, bool]:
+    start_ollama(project_root)
+    start_whatsapp(project_root)
+    if get_bot_health() is None:
+        start_bot(project_root)
+        _wait_for_url(BOT_URL, 20)
+    return get_service_statuses()
 
 
 def start_bot(project_root: Path = PROJECT_ROOT) -> None:
@@ -197,8 +360,8 @@ class AiControlWindow:
         self.busy = False
         self.log_records: dict[str, dict[str, object]] = {}
         root.title("Isso Facilita — Controle da IA")
-        root.geometry("1180x780")
-        root.minsize(980, 680)
+        root.geometry("1180x820")
+        root.minsize(980, 720)
         root.configure(bg=self.BACKGROUND)
         root.option_add("*Font", "{Segoe UI} 9")
 
@@ -266,7 +429,9 @@ class AiControlWindow:
             highlightthickness=1,
         )
         control_card.pack(fill="x", pady=(0, 16))
-        control_copy = tk.Frame(control_card, bg=self.SURFACE)
+        ai_row = tk.Frame(control_card, bg=self.SURFACE)
+        ai_row.pack(fill="x")
+        control_copy = tk.Frame(ai_row, bg=self.SURFACE)
         control_copy.pack(side="left", fill="x", expand=True)
         tk.Label(
             control_copy,
@@ -284,7 +449,7 @@ class AiControlWindow:
         )
         self.detail.pack(anchor="w", pady=(4, 0))
 
-        buttons = tk.Frame(control_card, bg=self.SURFACE)
+        buttons = tk.Frame(ai_row, bg=self.SURFACE)
         buttons.pack(side="right", padx=(24, 0))
         self.disable_button = self._make_button(
             buttons,
@@ -304,6 +469,59 @@ class AiControlWindow:
             foreground="#ffffff",
         )
         self.enable_button.pack(side="left")
+
+        tk.Frame(control_card, bg=self.BORDER, height=1).pack(fill="x", pady=15)
+        services_row = tk.Frame(control_card, bg=self.SURFACE)
+        services_row.pack(fill="x")
+        services_copy = tk.Frame(services_row, bg=self.SURFACE)
+        services_copy.pack(side="left", fill="x", expand=True)
+        services_title = tk.Frame(services_copy, bg=self.SURFACE)
+        services_title.pack(anchor="w")
+        tk.Label(
+            services_title,
+            text="Serviços e memória",
+            bg=self.SURFACE,
+            fg=self.TEXT,
+            font=("Segoe UI Semibold", 12),
+        ).pack(side="left")
+        self.services_status = tk.Label(
+            services_title,
+            text="●  VERIFICANDO",
+            bg=self.SURFACE_ALT,
+            fg=self.MUTED,
+            font=("Segoe UI Semibold", 8),
+            padx=9,
+            pady=4,
+        )
+        self.services_status.pack(side="left", padx=(10, 0))
+        tk.Label(
+            services_copy,
+            text="Bot, WhatsApp Web e Ollama. Parar tudo descarrega o modelo da memória.",
+            bg=self.SURFACE,
+            fg=self.MUTED,
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(4, 0))
+
+        service_buttons = tk.Frame(services_row, bg=self.SURFACE)
+        service_buttons.pack(side="right", padx=(24, 0))
+        self.start_all_button = self._make_button(
+            service_buttons,
+            text="INICIAR TUDO",
+            command=self.start_all,
+            background="#1d493b",
+            hover="#265d4c",
+            foreground="#8aefc1",
+        )
+        self.start_all_button.pack(side="left", padx=(0, 8))
+        self.stop_all_button = self._make_button(
+            service_buttons,
+            text="PARAR TUDO",
+            command=self.stop_all,
+            background=self.RED,
+            hover="#ff8895",
+            foreground="#25080d",
+        )
+        self.stop_all_button.pack(side="left")
 
         log_card = tk.Frame(
             container,
@@ -508,10 +726,21 @@ class AiControlWindow:
     def refresh_status(self) -> None:
         if self.busy:
             return
-        health = get_bot_health()
+        health = get_bot_health(0.5)
+        statuses = {
+            "bot": health is not None,
+            "whatsapp": is_url_available(WHATSAPP_URL),
+            "ollama": is_url_available(OLLAMA_URL),
+        }
         configured = read_ai_enabled()
         active = health.get("ai_curation") if health else configured
-        if active is True:
+        if not statuses["bot"]:
+            self.ai_status.configure(
+                text="●  IA PARADA",
+                fg=self.MUTED,
+                bg=self.SURFACE,
+            )
+        elif active is True:
             self.ai_status.configure(
                 text="●  IA ATIVADA",
                 fg=self.GREEN,
@@ -530,10 +759,29 @@ class AiControlWindow:
                 bg=self.SURFACE,
             )
         self.bot_status.configure(
-            text="●  BOT ONLINE" if health else "●  BOT OFFLINE",
-            fg=self.GREEN if health else self.RED,
-            bg=self.GREEN_SOFT if health else self.RED_SOFT,
+            text="●  BOT ONLINE" if statuses["bot"] else "●  BOT OFFLINE",
+            fg=self.GREEN if statuses["bot"] else self.RED,
+            bg=self.GREEN_SOFT if statuses["bot"] else self.RED_SOFT,
         )
+        online_count = sum(statuses.values())
+        if online_count == len(statuses):
+            self.services_status.configure(
+                text="●  TUDO ONLINE",
+                fg=self.GREEN,
+                bg=self.GREEN_SOFT,
+            )
+        elif online_count == 0:
+            self.services_status.configure(
+                text="●  TUDO PARADO",
+                fg=self.MUTED,
+                bg=self.SURFACE_ALT,
+            )
+        else:
+            self.services_status.configure(
+                text=f"●  {online_count}/3 ONLINE",
+                fg=self.AMBER,
+                bg="#3b3422",
+            )
         self.root.after(3000, self.refresh_status)
 
     def refresh_log(self) -> None:
@@ -630,8 +878,7 @@ class AiControlWindow:
         if self.busy:
             return
         self.busy = True
-        self.enable_button.configure(state="disabled")
-        self.disable_button.configure(state="disabled")
+        self._set_controls_state("disabled")
         self.ai_status.configure(
             text="●  APLICANDO...",
             fg=self.MUTED,
@@ -643,6 +890,50 @@ class AiControlWindow:
             bg=self.SURFACE,
         )
         threading.Thread(target=self._apply, args=(enabled,), daemon=True).start()
+
+    def start_all(self) -> None:
+        if self.busy:
+            return
+        self.busy = True
+        self._set_controls_state("disabled")
+        self.services_status.configure(
+            text="●  INICIANDO...",
+            fg=self.AMBER,
+            bg="#3b3422",
+        )
+        self.detail.configure(text="Iniciando Ollama, WhatsApp Web e bot local...")
+        threading.Thread(target=self._apply_services, args=(True,), daemon=True).start()
+
+    def stop_all(self) -> None:
+        if self.busy:
+            return
+        self.busy = True
+        self._set_controls_state("disabled")
+        self.services_status.configure(
+            text="●  ENCERRANDO...",
+            fg=self.AMBER,
+            bg="#3b3422",
+        )
+        self.detail.configure(text="Encerrando os serviços e liberando a memória do modelo...")
+        threading.Thread(target=self._apply_services, args=(False,), daemon=True).start()
+
+    def _apply_services(self, should_start: bool) -> None:
+        try:
+            statuses = start_everything() if should_start else stop_everything()
+        except Exception as error:
+            message = str(error)
+            self.root.after(0, lambda: self._finish_error(message))
+            return
+        self.root.after(0, lambda: self._finish_services(should_start, statuses))
+
+    def _set_controls_state(self, state: str) -> None:
+        for button in (
+            self.enable_button,
+            self.disable_button,
+            self.start_all_button,
+            self.stop_all_button,
+        ):
+            button.configure(state=state)
 
     def _apply(self, enabled: bool) -> None:
         try:
@@ -659,8 +950,7 @@ class AiControlWindow:
 
     def _finish_success(self, enabled: bool) -> None:
         self.busy = False
-        self.enable_button.configure(state="normal")
-        self.disable_button.configure(state="normal")
+        self._set_controls_state("normal")
         self.detail.configure(
             text="IA ativada e bot reiniciado."
             if enabled
@@ -668,10 +958,22 @@ class AiControlWindow:
         )
         self.refresh_status()
 
+    def _finish_services(self, started: bool, statuses: dict[str, bool]) -> None:
+        self.busy = False
+        self._set_controls_state("normal")
+        if started and all(statuses.values()):
+            self.detail.configure(
+                text="Todos os serviços foram iniciados. A sessão do WhatsApp foi preservada."
+            )
+        elif not started and not any(statuses.values()):
+            self.detail.configure(
+                text="Tudo parado. Bot, WhatsApp e modelo do Ollama foram retirados da memória."
+            )
+        self.refresh_status()
+
     def _finish_error(self, message: str) -> None:
         self.busy = False
-        self.enable_button.configure(state="normal")
-        self.disable_button.configure(state="normal")
+        self._set_controls_state("normal")
         self.detail.configure(text="Não foi possível aplicar a alteração.")
         self.refresh_status()
         messagebox.showerror("Isso Facilita", message, parent=self.root)

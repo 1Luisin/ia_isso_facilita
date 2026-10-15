@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import isso_facilita.desktop_control as desktop_control
 from isso_facilita.desktop_control import read_ai_enabled, write_ai_enabled
 
 
@@ -70,3 +71,58 @@ def test_read_ai_enabled_accepts_quoted_boolean(tmp_path: Path) -> None:
 
 def test_read_ai_enabled_returns_none_for_missing_file(tmp_path: Path) -> None:
     assert read_ai_enabled(tmp_path / ".env") is None
+
+
+def test_stop_everything_targets_only_project_services(monkeypatch) -> None:
+    actions: list[str] = []
+    monkeypatch.setattr(desktop_control, "stop_bot", lambda: actions.append("bot"))
+    monkeypatch.setattr(
+        desktop_control,
+        "_stop_listener_service",
+        lambda port, _names: actions.append(str(port)),
+    )
+    monkeypatch.setattr(
+        desktop_control,
+        "get_service_statuses",
+        lambda: {"bot": False, "whatsapp": False, "ollama": False},
+    )
+
+    statuses = desktop_control.stop_everything()
+
+    assert actions == ["bot", "3001", "11434"]
+    assert not any(statuses.values())
+
+
+def test_start_everything_uses_safe_service_order(monkeypatch, tmp_path: Path) -> None:
+    actions: list[str] = []
+    monkeypatch.setattr(
+        desktop_control,
+        "start_ollama",
+        lambda _root: actions.append("ollama"),
+    )
+    monkeypatch.setattr(
+        desktop_control,
+        "start_whatsapp",
+        lambda _root: actions.append("whatsapp"),
+    )
+    monkeypatch.setattr(desktop_control, "get_bot_health", lambda: None)
+    monkeypatch.setattr(
+        desktop_control,
+        "start_bot",
+        lambda _root: actions.append("bot"),
+    )
+    monkeypatch.setattr(
+        desktop_control,
+        "_wait_for_url",
+        lambda url, _timeout: actions.append(url),
+    )
+    monkeypatch.setattr(
+        desktop_control,
+        "get_service_statuses",
+        lambda: {"bot": True, "whatsapp": True, "ollama": True},
+    )
+
+    statuses = desktop_control.start_everything(tmp_path)
+
+    assert actions == ["ollama", "whatsapp", "bot", desktop_control.BOT_URL]
+    assert all(statuses.values())
