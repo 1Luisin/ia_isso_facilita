@@ -14,6 +14,20 @@ class CurationError(RuntimeError):
     """Falha segura durante a avaliação ou criação da copy."""
 
 
+FORBIDDEN_COPY_TERMS = (
+    "kawaii",
+    "toque de fofura",
+    "mais personalidade",
+    "deixar seu cantinho",
+    "para o seu cantinho",
+    "design moderno",
+    "ideal para",
+    "produto incrivel",
+    "produto incrível",
+    "une estilo e funcionalidade",
+)
+
+
 @dataclass(frozen=True, slots=True)
 class CurationResult:
     relevant: bool
@@ -71,19 +85,7 @@ def _validate_copy(product: Product, result: CurationResult) -> CurationResult:
 
     normalized_title = product.title.casefold()
     normalized_copy = f"{headline} {description} {product_name}".casefold()
-    forbidden_copy = (
-        "kawaii",
-        "toque de fofura",
-        "mais personalidade",
-        "deixar seu cantinho",
-        "para o seu cantinho",
-        "design moderno",
-        "ideal para",
-        "produto incrivel",
-        "produto incrível",
-        "une estilo e funcionalidade",
-    )
-    if any(term in normalized_copy for term in forbidden_copy):
+    if any(term in normalized_copy for term in FORBIDDEN_COPY_TERMS):
         raise CurationError("A IA usou uma expressão genérica ou proibida na copy")
     if not description.endswith((".", "!", "?")):
         raise CurationError("A IA retornou uma descrição incompleta")
@@ -269,6 +271,7 @@ def _compact_identity(identity: dict[str, object]) -> dict[str, object]:
         "symbols": symbols,
         "preferred_products": identity.get("preferred_products", []),
         "reject_products": identity.get("reject_products", []),
+        "character_trends": identity.get("character_trends", {}),
     }
 
 
@@ -310,7 +313,7 @@ def _parse_result(product: Product, response_text: str) -> CurationResult:
     return _validate_copy(product, result)
 
 
-def _parse_ollama_result(product: Product, response_text: str) -> CurationResult:
+def _decode_ollama_result(response_text: str) -> CurationResult:
     try:
         data = json.loads(response_text)
         if not isinstance(data, dict) or not isinstance(data["relevant"], bool):
@@ -328,10 +331,6 @@ def _parse_ollama_result(product: Product, response_text: str) -> CurationResult
         description = data["description"].strip()
         if data["relevant"] and (not product_type or not description):
             raise TypeError
-        if data["relevant"] and _without_accents(product_type) not in _without_accents(
-            description
-        ):
-            raise CurationError("A descrição não nomeou claramente o produto identificado")
         result = CurationResult(
             relevant=data["relevant"],
             relevance_score=100 if data["relevant"] else 0,
@@ -343,7 +342,48 @@ def _parse_ollama_result(product: Product, response_text: str) -> CurationResult
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise CurationError("O Ollama retornou dados inválidos") from exc
+    return result
+
+
+def _parse_ollama_result(product: Product, response_text: str) -> CurationResult:
+    result = _decode_ollama_result(response_text)
+    if result.relevant and _without_accents(result.product_name) not in _without_accents(
+        result.description
+    ):
+        raise CurationError("A descrição não nomeou claramente o produto identificado")
     return _validate_copy(product, result)
+
+
+def _minimal_ollama_result(product: Product, response_text: str) -> CurationResult:
+    result = _decode_ollama_result(response_text)
+    if not result.relevant:
+        return _validate_copy(product, result)
+
+    product_name = result.product_name
+    for term in FORBIDDEN_COPY_TERMS:
+        product_name = re.sub(re.escape(term), "", product_name, flags=re.IGNORECASE)
+    official_numbers = set(re.findall(r"\d+(?:[.,]\d+)?", product.title))
+    product_name = re.sub(
+        r"\d+(?:[.,]\d+)?",
+        lambda match: match.group(0) if match.group(0) in official_numbers else "",
+        product_name,
+    )
+    product_name = re.sub(r"\s+", " ", product_name).strip(" ,.:;-")[:70].rstrip()
+    if not product_name:
+        raise CurationError("O Ollama não identificou um nome seguro para o produto")
+    if result.category not in {"tech", "general"}:
+        raise CurationError("A IA retornou uma categoria editorial inválida")
+
+    product_name = _normalize_collectible_terms(product, product_name)
+    return CurationResult(
+        relevant=True,
+        relevance_score=100,
+        headline=f"{product_name} em destaque ✦",
+        description=f"{product_name}: seleção da curadoria da Isso Facilita.",
+        reason="Copy simplificada após a validação da resposta local.",
+        category=result.category,
+        product_name=product_name,
+    )
 
 
 class OpenAICurator:
@@ -532,7 +572,7 @@ class OllamaCurator:
             "stream": False,
             "think": False,
             "format": self.schema,
-            "options": {"temperature": 0, "num_ctx": 4096, "num_predict": 300},
+            "options": {"temperature": 0, "num_ctx": 16384, "num_predict": 300},
             "keep_alive": "10m",
         }
         async with httpx.AsyncClient(
@@ -560,7 +600,10 @@ class OllamaCurator:
                     },
                 ]
                 repaired = await self._request(client, request)
-        return _parse_ollama_result(product, repaired)
+        try:
+            return _parse_ollama_result(product, repaired)
+        except CurationError:
+            return _minimal_ollama_result(product, repaired)
 
     async def _load_product_image(
         self, client: httpx.AsyncClient, image_url: str

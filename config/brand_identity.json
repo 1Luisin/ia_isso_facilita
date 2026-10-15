@@ -56,6 +56,59 @@
     "diversity_rule": "O foco principal é setup e tecnologia. Intercalar acessórios de PC, periféricos, monitores, áudio, gadgets, Action Figures de anime/Vocaloid e, com menor frequência, itens Sanrio. Nunca publicar uma sequência dominada pelo mesmo personagem, franquia ou tipo de produto."
   },
 
+  "character_trends": {
+    "last_reviewed": "2026-10-15",
+    "current_franchises": [
+      "My Hero Academia",
+      "DAN DA DAN",
+      "Dandadan",
+      "Gachiakuta",
+      "Solo Leveling",
+      "One Piece",
+      "Demon Slayer",
+      "Kimetsu no Yaiba",
+      "The Apothecary Diaries",
+      "Kusuriya no Hitorigoto",
+      "SPY x FAMILY",
+      "Chainsaw Man",
+      "Kaiju No. 8",
+      "Wuthering Waves",
+      "Genshin Impact",
+      "Hollow Knight",
+      "Silksong",
+      "Clair Obscur",
+      "Hades II",
+      "Marvel Rivals"
+    ],
+    "current_characters": [
+      "Maomao",
+      "Sung Jinwoo",
+      "Anya Forger",
+      "Momo Ayase",
+      "Okarun",
+      "Rudo",
+      "Reze",
+      "Akaza",
+      "Izuku Midoriya",
+      "Deku",
+      "Bakugo",
+      "Luffy"
+    ],
+    "famous_franchises": [
+      "Hatsune Miku",
+      "Vocaloid",
+      "Dragon Ball",
+      "Naruto",
+      "Pokémon",
+      "Pokemon",
+      "The Legend of Zelda",
+      "Super Mario",
+      "Honkai Star Rail",
+      "Zenless Zone Zero"
+    ],
+    "rule": "Em produtos com personagens, priorize franquias atuais ou muito conhecidas e personagens identificáveis. Popularidade não substitui qualidade, clareza do anúncio nem variedade editorial."
+  },
+
   "preferred_products": [
     "teclados mecânicos com bom acabamento e design diferenciado",
     "teclados compactos 60%, 65%, 75%, TKL e outros formatos",

@@ -100,19 +100,28 @@ SETUP_KEYWORDS = {
 
 ANIME_AND_VOCALOID_KEYWORDS = {
     "anime",
+    "apothecary diaries",
     "chainsaw man",
+    "dan da dan",
+    "dandadan",
     "demon slayer",
     "dragon ball",
     "evangelion",
     "frieren",
+    "gachiakuta",
     "genshin",
     "hatsune miku",
     "jujutsu kaisen",
+    "kaiju no 8",
+    "kusuriya no hitorigoto",
     "miku",
+    "my hero academia",
     "naruto",
     "one piece",
     "project sekai",
     "re zero",
+    "solo leveling",
+    "spy x family",
     "vocaloid",
 }
 
@@ -207,9 +216,26 @@ def classify_content_bucket(product: Product) -> str:
     return "other"
 
 
-def _product_priority(product: Product) -> tuple[float, float]:
+def _character_priority(
+    title: str, character_priorities: dict[str, float] | None
+) -> float:
+    if not character_priorities:
+        return 0.0
+    return max(
+        (
+            weight
+            for keyword, weight in character_priorities.items()
+            if re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", title)
+        ),
+        default=0.0,
+    )
+
+
+def _product_priority(
+    product: Product, character_priorities: dict[str, float] | None = None
+) -> tuple[float, float]:
     title = normalize(product.title)
-    specificity = 0.0
+    specificity = _character_priority(title, character_priorities)
     if "action figure" in title or "estatua" in title:
         specificity += 25
     if "vocaloid" in title or "hatsune miku" in title:
@@ -223,15 +249,19 @@ def _product_priority(product: Product) -> tuple[float, float]:
     return specificity, product.discount_percent
 
 
-def _interleave_prices(products: list[Product], minimum_discount: float) -> list[Product]:
+def _interleave_prices(
+    products: list[Product],
+    minimum_discount: float,
+    character_priorities: dict[str, float] | None = None,
+) -> list[Product]:
     promotional = sorted(
         (item for item in products if item.discount_percent >= minimum_discount),
-        key=_product_priority,
+        key=lambda item: _product_priority(item, character_priorities),
         reverse=True,
     )
     regular = sorted(
         (item for item in products if item.discount_percent < minimum_discount),
-        key=_product_priority,
+        key=lambda item: _product_priority(item, character_priorities),
         reverse=True,
     )
     return [
@@ -246,7 +276,10 @@ def _interleave_prices(products: list[Product], minimum_discount: float) -> list
 
 
 def order_for_editorial_rotation(
-    products: list[Product], minimum_discount: float, rotation_index: int
+    products: list[Product],
+    minimum_discount: float,
+    rotation_index: int,
+    character_priorities: dict[str, float] | None = None,
 ) -> list[Product]:
     grouped: dict[str, list[Product]] = {}
     for product in products:
@@ -266,9 +299,19 @@ def order_for_editorial_rotation(
         if bucket == "anime_collectible":
             # Uma Action Figure específica e maior deve vencer brindes, standees e
             # miniaturas genéricas, mesmo que estes exibam um desconto percentual maior.
-            ordered.extend(sorted(bucket_products, key=_product_priority, reverse=True))
+            ordered.extend(
+                sorted(
+                    bucket_products,
+                    key=lambda item: _product_priority(item, character_priorities),
+                    reverse=True,
+                )
+            )
         else:
-            ordered.extend(_interleave_prices(bucket_products, minimum_discount))
+            ordered.extend(
+                _interleave_prices(
+                    bucket_products, minimum_discount, character_priorities
+                )
+            )
     return ordered
 
 
@@ -338,6 +381,7 @@ class PromotionService:
         curator: ProductCurator | None = None,
         ai_relevance_threshold: int = 75,
         max_ai_evaluations_per_run: int = 6,
+        character_priorities: dict[str, float] | None = None,
     ) -> None:
         self.providers = providers
         self.publisher = publisher
@@ -349,6 +393,10 @@ class PromotionService:
         self.curator = curator
         self.ai_relevance_threshold = ai_relevance_threshold
         self.max_ai_evaluations_per_run = max_ai_evaluations_per_run
+        self.character_priorities = {
+            normalize(keyword): weight
+            for keyword, weight in (character_priorities or {}).items()
+        }
         self._run_lock = asyncio.Lock()
 
     async def run(self) -> RunResult:
@@ -382,11 +430,24 @@ class PromotionService:
             except ValueError:
                 rotation_index = 0
             eligible = order_for_editorial_rotation(
-                eligible, self.min_discount_percent, rotation_index
+                eligible,
+                self.min_discount_percent,
+                rotation_index,
+                self.character_priorities,
             )
             result.eligible = len(eligible)
+            candidate_offset = 0
+            if self.curator and eligible:
+                try:
+                    candidate_offset = int(
+                        self.repository.get_state("ai_candidate_offset", "0")
+                    ) % len(eligible)
+                except ValueError:
+                    candidate_offset = 0
+                eligible = eligible[candidate_offset:] + eligible[:candidate_offset]
+            next_candidate_offset = candidate_offset
             destinations = self.publisher.destinations()
-            for product in eligible:
+            for position, product in enumerate(eligible):
                 if result.published >= self.max_offers_per_run:
                     break
                 pending = (
@@ -408,6 +469,9 @@ class PromotionService:
                     if result.ai_evaluated >= self.max_ai_evaluations_per_run:
                         break
                     result.ai_evaluated += 1
+                    next_candidate_offset = (
+                        candidate_offset + position + 1
+                    ) % len(eligible)
                     try:
                         curation = await self.curator.curate(product)
                     except Exception:
@@ -464,4 +528,11 @@ class PromotionService:
                             str((rotation_index + 1) % len(EDITORIAL_ROTATION)),
                         )
                     rotation_index = (rotation_index + 1) % len(EDITORIAL_ROTATION)
+            if self.curator and self.record_publications:
+                if result.published:
+                    self.repository.set_state("ai_candidate_offset", "0")
+                elif result.ai_evaluated:
+                    self.repository.set_state(
+                        "ai_candidate_offset", str(next_candidate_offset)
+                    )
             return result

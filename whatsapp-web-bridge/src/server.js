@@ -16,6 +16,7 @@ const clientId = process.env.WHATSAPP_WEB_CLIENT_ID || "isso-facilita";
 const minimumSendInterval = Number(
   process.env.WHATSAPP_WEB_MIN_SEND_INTERVAL_MS || "5000",
 );
+const sendTimeout = Number(process.env.WHATSAPP_WEB_SEND_TIMEOUT_MS || "45000");
 const dataDirectory = path.resolve(
   rootDirectory,
   process.env.WHATSAPP_WEB_DATA_PATH || "whatsapp-web-bridge/.data",
@@ -48,6 +49,16 @@ function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+function withTimeout(promise, milliseconds, message) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(Object.assign(new Error(message), { statusCode: 504 }));
+    }, milliseconds);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timeoutId));
+}
+
 function requireToken(request, response, next) {
   if (!bridgeToken) {
     return response.status(503).json({ ok: false, error: "Token local não configurado" });
@@ -61,7 +72,11 @@ function requireToken(request, response, next) {
 
 async function listGroups() {
   if (status !== "ready") return [];
-  const chats = await client.getChats();
+  const chats = await withTimeout(
+    client.getChats(),
+    sendTimeout,
+    "O WhatsApp demorou demais para listar as conversas",
+  );
   return chats
     .filter((chat) => chat.isGroup)
     .map((chat) => ({ id: chat.id._serialized, name: chat.name || "Grupo sem nome" }))
@@ -250,7 +265,12 @@ app.post("/send", requireToken, (request, response) => {
     return { message, mediaAttached };
   };
 
-  sendQueue = sendQueue.then(task, task);
+  const boundedTask = () => withTimeout(
+    task(),
+    sendTimeout,
+    "O WhatsApp demorou demais para concluir o envio",
+  );
+  sendQueue = sendQueue.then(boundedTask, boundedTask);
   sendQueue
     .then(({ message, mediaAttached }) => response.json({
       ok: true,
@@ -258,7 +278,7 @@ app.post("/send", requireToken, (request, response) => {
       media_attached: mediaAttached,
     }))
     .catch((error) => {
-      console.error("Falha ao enviar mensagem ao grupo.");
+      console.error("Falha ao enviar mensagem ao grupo.", error);
       response.status(error.statusCode || 500).json({ ok: false, error: error.message || "Falha no envio" });
     });
 });

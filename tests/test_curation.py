@@ -138,6 +138,7 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
         assert payload["format"]["type"] == "object"
         assert "relevance_score" not in payload["format"]["properties"]
         assert payload["options"]["temperature"] == 0
+        assert payload["options"]["num_ctx"] == 16384
         serialized = json.dumps(payload, ensure_ascii=False)
         assert "132.59" not in serialized
         assert "_short" not in serialized
@@ -247,6 +248,35 @@ async def test_ollama_repairs_unsupported_copy_once(tmp_path) -> None:
     assert calls == 2
     assert result.relevant
     assert result.description == "Fones de ouvido Bluetooth com gancho ajustável."
+
+
+@pytest.mark.asyncio
+async def test_ollama_uses_safe_minimal_copy_after_two_invalid_attempts(tmp_path) -> None:
+    async def handler(_: httpx.Request) -> httpx.Response:
+        content = {
+            "relevant": True,
+            "headline": "Produto incrível para sua rotina",
+            "product_type": "Fones de ouvido",
+            "description": "Fones de ouvido ideal para o dia a dia",
+            "reason": "Produto de áudio alinhado à página.",
+            "category": "tech",
+        }
+        return httpx.Response(
+            200,
+            json={"message": {"role": "assistant", "content": json.dumps(content)}},
+        )
+
+    curator = OllamaCurator(
+        model="qwen3-vl:2b-instruct",
+        identity_path=identity_file(tmp_path),
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = await curator.curate(product())
+
+    assert result.relevant
+    assert result.headline == "Fones de ouvido em destaque ✦"
+    assert result.description == "Fones de ouvido: seleção da curadoria da Isso Facilita."
 
 
 @pytest.mark.asyncio

@@ -155,3 +155,27 @@ def test_anime_rotation_prefers_action_figure_over_small_standee() -> None:
     )
 
     assert ordered[0].product_id == "miku"
+
+
+def test_current_character_franchise_gets_priority_inside_same_slot() -> None:
+    famous_game = product(
+        product_id="genshin",
+        title="Genshin Impact keycaps PBT para teclado mecânico",
+        price=Decimal("70"),
+        original_price=Decimal("100"),
+    )
+    generic = product(
+        product_id="generic",
+        title="Keycaps PBT para teclado mecânico",
+        price=Decimal("40"),
+        original_price=Decimal("100"),
+    )
+
+    ordered = order_for_editorial_rotation(
+        [generic, famous_game],
+        20,
+        rotation_index=0,
+        character_priorities={"genshin impact": 60},
+    )
+
+    assert ordered[0].product_id == "genshin"

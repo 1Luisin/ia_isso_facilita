@@ -1,6 +1,6 @@
 from urllib.parse import parse_qs, urlparse
 
-from isso_facilita.app import render_dashboard
+from isso_facilita.app import cycle_delay_seconds, render_dashboard
 
 
 def test_dashboard_builds_whatsapp_share_link() -> None:
@@ -21,3 +21,9 @@ def test_dashboard_builds_whatsapp_share_link() -> None:
     assert parse_qs(urlparse(href).query)["text"] == [
         "Oferta SSD\nhttps://example.com/affiliate?a=1&b=2"
     ]
+
+
+def test_scheduler_counts_processing_time_inside_interval() -> None:
+    assert cycle_delay_seconds(5, 72.5) == 227.5
+    assert cycle_delay_seconds(5, 301) == 0
+    assert cycle_delay_seconds(0, 10) == 0

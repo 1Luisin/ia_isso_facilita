@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     enabled_marketplaces: str = "demo"
     publisher: str = "console"
     dry_run: bool = True
-    scan_interval_minutes: int = Field(default=30, ge=1)
+    scan_interval_minutes: int = Field(default=30, ge=0)
     min_discount_percent: float = Field(default=20, ge=0, le=100)
     include_non_promotional_products: bool = True
     max_offers_per_run: int = Field(default=5, ge=1, le=50)
@@ -45,7 +45,9 @@ class Settings(BaseSettings):
         "mechanical keyboard,keycaps,wireless mouse,deskmat,monitor light bar,"
         "monitor arm,laptop stand,usb hub,microphone,bluetooth headphones,gan charger,"
         "ssd nvme,portable monitor,anime action figure 25cm,vocaloid action figure,"
-        "hatsune miku figure,sanrio desk accessory"
+        "hatsune miku figure,sanrio desk accessory,solo leveling figure,dandadan figure,"
+        "my hero academia figure,demon slayer figure,wuthering waves figure,"
+        "genshin impact figure,hollow knight silksong figure,clair obscur figure"
     )
 
     telegram_bot_token: str = ""

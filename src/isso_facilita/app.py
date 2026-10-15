@@ -24,7 +24,9 @@ repository = PublicationRepository(settings.database_path)
 
 
 async def scheduler_loop(bot: PromotionService, interval_minutes: int) -> None:
+    loop = asyncio.get_running_loop()
     while True:
+        started_at = loop.time()
         try:
             result = await bot.run()
             logger.info("Ciclo concluído: %s", result.to_dict())
@@ -32,7 +34,12 @@ async def scheduler_loop(bot: PromotionService, interval_minutes: int) -> None:
             raise
         except Exception:
             logger.exception("Falha inesperada no ciclo agendado")
-        await asyncio.sleep(interval_minutes * 60)
+        elapsed_seconds = loop.time() - started_at
+        await asyncio.sleep(cycle_delay_seconds(interval_minutes, elapsed_seconds))
+
+
+def cycle_delay_seconds(interval_minutes: int, elapsed_seconds: float) -> float:
+    return max(0.0, interval_minutes * 60 - elapsed_seconds)
 
 
 @asynccontextmanager

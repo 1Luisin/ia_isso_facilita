@@ -78,6 +78,34 @@ class RejectingCurator:
         )
 
 
+class FailingCurator:
+    def __init__(self) -> None:
+        self.product_ids: list[str] = []
+
+    async def curate(self, product: Product) -> CurationResult:
+        self.product_ids.append(product.product_id)
+        raise RuntimeError("resposta inválida")
+
+
+class FakeManyProductsProvider(MarketplaceProvider):
+    name = "many"
+
+    async def discover(self) -> list[Product]:
+        return [
+            Product(
+                marketplace="aliexpress",
+                product_id=str(index),
+                title=f"Mouse sem fio modelo {index}",
+                product_url=f"https://example.com/product/{index}",
+                affiliate_url=f"https://example.com/affiliate/{index}",
+                image_url="",
+                price=Decimal(100 - index),
+                original_price=Decimal("100"),
+            )
+            for index in range(1, 5)
+        ]
+
+
 def test_technology_filter_rejects_tarot_with_mouse_in_title() -> None:
     item = Product(
         marketplace="aliexpress",
@@ -111,6 +139,29 @@ async def test_ai_curation_can_reject_a_keyword_match(tmp_path) -> None:
     assert result.published == 0
     assert result.ai_rejected == 1
     assert publisher.messages == []
+
+
+@pytest.mark.asyncio
+async def test_ai_curation_advances_candidates_after_failed_cycle(tmp_path) -> None:
+    curator = FailingCurator()
+    service = PromotionService(
+        providers=[FakeManyProductsProvider()],
+        publisher=FakePublisher(),
+        repository=PublicationRepository(tmp_path / "offers.db"),
+        min_discount_percent=0,
+        max_offers_per_run=1,
+        curator=curator,
+        max_ai_evaluations_per_run=2,
+    )
+
+    first = await service.run()
+    first_product_ids = set(curator.product_ids)
+    curator.product_ids.clear()
+    second = await service.run()
+
+    assert first.ai_evaluated == 2
+    assert second.ai_evaluated == 2
+    assert first_product_ids.isdisjoint(curator.product_ids)
 
 
 @pytest.mark.asyncio

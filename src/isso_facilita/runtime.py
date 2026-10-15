@@ -1,5 +1,5 @@
 from isso_facilita.config import Settings
-from isso_facilita.curation import OllamaCurator, OpenAICurator
+from isso_facilita.curation import OllamaCurator, OpenAICurator, load_brand_identity
 from isso_facilita.db import PublicationRepository
 from isso_facilita.providers import build_providers
 from isso_facilita.publishers import build_publisher
@@ -7,6 +7,20 @@ from isso_facilita.service import PromotionService
 
 
 def build_service(settings: Settings) -> PromotionService:
+    identity = load_brand_identity(settings.brand_identity_path)
+    trend_config = identity.get("character_trends", {})
+    character_priorities: dict[str, float] = {}
+    if isinstance(trend_config, dict):
+        for field, weight in (
+            ("current_characters", 75.0),
+            ("current_franchises", 60.0),
+            ("famous_franchises", 35.0),
+        ):
+            values = trend_config.get(field, [])
+            if isinstance(values, list):
+                character_priorities.update(
+                    {str(value): weight for value in values if str(value).strip()}
+                )
     curator = None
     if settings.ai_curation_enabled:
         if settings.ai_provider == "ollama":
@@ -36,4 +50,5 @@ def build_service(settings: Settings) -> PromotionService:
         curator=curator,
         ai_relevance_threshold=settings.ai_relevance_threshold,
         max_ai_evaluations_per_run=settings.max_ai_evaluations_per_run,
+        character_priorities=character_priorities,
     )
