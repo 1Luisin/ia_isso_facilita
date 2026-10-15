@@ -176,137 +176,210 @@ def restart_bot(project_root: Path = PROJECT_ROOT, timeout: float = 20) -> dict[
 
 
 class AiControlWindow:
-    BACKGROUND = "#101820"
-    PANEL = "#17232d"
-    TEXT = "#f4f7f9"
-    MUTED = "#a8b5bf"
-    GREEN = "#35c47c"
-    RED = "#ef6461"
+    BACKGROUND = "#0a0f18"
+    SURFACE = "#121a27"
+    SURFACE_ALT = "#172233"
+    BORDER = "#243247"
+    TEXT = "#f5f7fb"
+    MUTED = "#93a1b5"
+    ACCENT = "#7c6cff"
+    ACCENT_HOVER = "#9185ff"
+    GREEN = "#38d996"
+    GREEN_SOFT = "#173b31"
+    RED = "#ff7080"
+    RED_SOFT = "#40212b"
+    BLUE = "#62b7ff"
+    BLUE_HOVER = "#7bc3ff"
+    AMBER = "#f2c66d"
 
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.busy = False
         self.log_records: dict[str, dict[str, object]] = {}
         root.title("Isso Facilita — Controle da IA")
-        root.geometry("1080x720")
-        root.minsize(860, 600)
+        root.geometry("1180x780")
+        root.minsize(980, 680)
         root.configure(bg=self.BACKGROUND)
+        root.option_add("*Font", "{Segoe UI} 9")
 
-        panel = tk.Frame(root, bg=self.PANEL, padx=24, pady=20)
-        panel.pack(fill="both", expand=True, padx=18, pady=18)
+        container = tk.Frame(root, bg=self.BACKGROUND)
+        container.pack(fill="both", expand=True, padx=26, pady=22)
 
-        tk.Label(
-            panel,
-            text="ISSO FACILITA",
-            bg=self.PANEL,
-            fg=self.TEXT,
-            font=("Segoe UI", 18, "bold"),
-        ).pack()
-        tk.Label(
-            panel,
-            text="Controle local da curadoria por IA",
-            bg=self.PANEL,
-            fg=self.MUTED,
-            font=("Segoe UI", 10),
-        ).pack(pady=(2, 20))
-
-        self.ai_status = tk.Label(
-            panel,
-            text="Verificando IA...",
-            bg=self.PANEL,
-            fg=self.MUTED,
-            font=("Segoe UI", 14, "bold"),
+        header = tk.Frame(container, bg=self.BACKGROUND)
+        header.pack(fill="x", pady=(0, 18))
+        brand_mark = tk.Label(
+            header,
+            text="IF",
+            bg=self.ACCENT,
+            fg="#ffffff",
+            font=("Segoe UI", 15, "bold"),
+            padx=12,
+            pady=8,
         )
-        self.ai_status.pack()
+        brand_mark.pack(side="left", padx=(0, 12))
+        brand_text = tk.Frame(header, bg=self.BACKGROUND)
+        brand_text.pack(side="left")
+        tk.Label(
+            brand_text,
+            text="Isso Facilita",
+            bg=self.BACKGROUND,
+            fg=self.TEXT,
+            font=("Segoe UI Semibold", 19),
+        ).pack(anchor="w")
+        tk.Label(
+            brand_text,
+            text="Central de controle da curadoria",
+            bg=self.BACKGROUND,
+            fg=self.MUTED,
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(1, 0))
+
+        status_group = tk.Frame(header, bg=self.BACKGROUND)
+        status_group.pack(side="right")
         self.bot_status = tk.Label(
-            panel,
-            text="Verificando bot...",
-            bg=self.PANEL,
+            status_group,
+            text="●  VERIFICANDO BOT",
+            bg=self.SURFACE,
+            fg=self.MUTED,
+            font=("Segoe UI Semibold", 9),
+            padx=13,
+            pady=8,
+        )
+        self.bot_status.pack(side="right", padx=(8, 0))
+        self.ai_status = tk.Label(
+            status_group,
+            text="●  VERIFICANDO IA",
+            bg=self.SURFACE,
+            fg=self.MUTED,
+            font=("Segoe UI Semibold", 9),
+            padx=13,
+            pady=8,
+        )
+        self.ai_status.pack(side="right")
+
+        control_card = tk.Frame(
+            container,
+            bg=self.SURFACE,
+            padx=20,
+            pady=17,
+            highlightbackground=self.BORDER,
+            highlightthickness=1,
+        )
+        control_card.pack(fill="x", pady=(0, 16))
+        control_copy = tk.Frame(control_card, bg=self.SURFACE)
+        control_copy.pack(side="left", fill="x", expand=True)
+        tk.Label(
+            control_copy,
+            text="Curadoria por inteligência artificial",
+            bg=self.SURFACE,
+            fg=self.TEXT,
+            font=("Segoe UI Semibold", 12),
+        ).pack(anchor="w")
+        self.detail = tk.Label(
+            control_copy,
+            text="Ative ou desative a IA. A troca reinicia somente o bot local.",
+            bg=self.SURFACE,
             fg=self.MUTED,
             font=("Segoe UI", 9),
         )
-        self.bot_status.pack(pady=(4, 18))
+        self.detail.pack(anchor="w", pady=(4, 0))
 
-        buttons = tk.Frame(panel, bg=self.PANEL)
-        buttons.pack(fill="x")
-        self.enable_button = tk.Button(
-            buttons,
-            text="ATIVAR IA",
-            command=lambda: self.set_enabled(True),
-            bg=self.GREEN,
-            fg="#07150e",
-            activebackground="#55d493",
-            relief="flat",
-            font=("Segoe UI", 10, "bold"),
-            padx=18,
-            pady=11,
-            cursor="hand2",
-        )
-        self.enable_button.pack(side="left", expand=True, fill="x", padx=(0, 6))
-        self.disable_button = tk.Button(
+        buttons = tk.Frame(control_card, bg=self.SURFACE)
+        buttons.pack(side="right", padx=(24, 0))
+        self.disable_button = self._make_button(
             buttons,
             text="DESATIVAR IA",
             command=lambda: self.set_enabled(False),
-            bg=self.RED,
-            fg="#210706",
-            activebackground="#f27f7d",
-            relief="flat",
-            font=("Segoe UI", 10, "bold"),
+            background=self.RED_SOFT,
+            hover="#53303a",
+            foreground="#ffabb4",
+        )
+        self.disable_button.pack(side="left", padx=(0, 8))
+        self.enable_button = self._make_button(
+            buttons,
+            text="ATIVAR IA",
+            command=lambda: self.set_enabled(True),
+            background=self.ACCENT,
+            hover=self.ACCENT_HOVER,
+            foreground="#ffffff",
+        )
+        self.enable_button.pack(side="left")
+
+        log_card = tk.Frame(
+            container,
+            bg=self.SURFACE,
             padx=18,
-            pady=11,
-            cursor="hand2",
+            pady=16,
+            highlightbackground=self.BORDER,
+            highlightthickness=1,
         )
-        self.disable_button.pack(side="left", expand=True, fill="x", padx=(6, 0))
-
-        self.detail = tk.Label(
-            panel,
-            text="A troca reinicia somente o bot. Ollama e WhatsApp continuam ligados.",
-            wraplength=360,
-            justify="center",
-            bg=self.PANEL,
-            fg=self.MUTED,
-            font=("Segoe UI", 8),
-        )
-        self.detail.pack(pady=(14, 12))
-
-        tk.Frame(panel, bg="#2a3a46", height=1).pack(fill="x", pady=(0, 12))
-        log_header = tk.Frame(panel, bg=self.PANEL)
-        log_header.pack(fill="x", pady=(0, 8))
+        log_card.pack(fill="both", expand=True)
+        log_header = tk.Frame(log_card, bg=self.SURFACE)
+        log_header.pack(fill="x", pady=(0, 12))
+        log_title = tk.Frame(log_header, bg=self.SURFACE)
+        log_title.pack(side="left")
         tk.Label(
-            log_header,
-            text="AVALIAÇÕES DA IA",
-            bg=self.PANEL,
+            log_title,
+            text="Avaliações da IA",
+            bg=self.SURFACE,
             fg=self.TEXT,
-            font=("Segoe UI", 11, "bold"),
-        ).pack(side="left")
+            font=("Segoe UI Semibold", 12),
+        ).pack(anchor="w")
+        tk.Label(
+            log_title,
+            text="Acompanhe as decisões mais recentes em tempo real",
+            bg=self.SURFACE,
+            fg=self.MUTED,
+            font=("Segoe UI", 9),
+        ).pack(anchor="w", pady=(2, 0))
         self.log_summary = tk.Label(
             log_header,
             text="Carregando histórico...",
-            bg=self.PANEL,
+            bg=self.SURFACE_ALT,
             fg=self.MUTED,
-            font=("Segoe UI", 9),
+            font=("Segoe UI Semibold", 9),
+            padx=12,
+            pady=7,
         )
-        self.log_summary.pack(side="right")
+        self.log_summary.pack(side="right", anchor="n")
 
         style = ttk.Style(root)
+        if "clam" in style.theme_names():
+            style.theme_use("clam")
         style.configure(
             "AiLog.Treeview",
-            background="#101820",
-            fieldbackground="#101820",
+            background=self.SURFACE_ALT,
+            fieldbackground=self.SURFACE_ALT,
             foreground=self.TEXT,
-            rowheight=27,
+            rowheight=31,
             borderwidth=0,
             font=("Segoe UI", 9),
         )
         style.configure(
             "AiLog.Treeview.Heading",
-            background="#273845",
-            foreground="#101820",
-            font=("Segoe UI", 9, "bold"),
+            background="#202d40",
+            foreground="#bec9d8",
+            borderwidth=0,
+            relief="flat",
+            padding=(8, 9),
+            font=("Segoe UI Semibold", 9),
         )
-        style.map("AiLog.Treeview", background=[("selected", "#35556b")])
+        style.map(
+            "AiLog.Treeview",
+            background=[("selected", "#2a3e5d")],
+            foreground=[("selected", "#ffffff")],
+        )
+        style.map("AiLog.Treeview.Heading", background=[("active", "#26364d")])
+        style.configure(
+            "Vertical.TScrollbar",
+            background="#33445c",
+            troughcolor=self.SURFACE_ALT,
+            bordercolor=self.SURFACE_ALT,
+            arrowcolor=self.MUTED,
+            relief="flat",
+        )
 
-        table_frame = tk.Frame(panel, bg=self.PANEL)
+        table_frame = tk.Frame(log_card, bg=self.SURFACE_ALT)
         table_frame.pack(fill="both", expand=True)
         columns = ("time", "status", "score", "marketplace", "title", "link")
         self.log_table = ttk.Treeview(
@@ -335,9 +408,9 @@ class AiControlWindow:
         for column in columns:
             self.log_table.heading(column, text=headings[column])
             self.log_table.column(column, width=widths[column], minwidth=50, anchor="w")
-        self.log_table.tag_configure("accepted", foreground="#62d89b")
-        self.log_table.tag_configure("rejected", foreground="#ff8a87")
-        self.log_table.tag_configure("error", foreground="#f2c66d")
+        self.log_table.tag_configure("accepted", foreground="#72e3ad")
+        self.log_table.tag_configure("rejected", foreground="#ff9aa5")
+        self.log_table.tag_configure("error", foreground=self.AMBER)
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.log_table.yview)
         self.log_table.configure(yscrollcommand=scrollbar.set)
         self.log_table.pack(side="left", fill="both", expand=True)
@@ -345,54 +418,92 @@ class AiControlWindow:
         self.log_table.bind("<<TreeviewSelect>>", self.show_selected_log)
         self.log_table.bind("<Double-1>", self.open_selected_link)
 
-        log_actions = tk.Frame(panel, bg=self.PANEL)
-        log_actions.pack(fill="x", pady=(10, 0))
+        detail_header = tk.Label(
+            log_card,
+            text="DETALHES DA DECISÃO",
+            bg=self.SURFACE,
+            fg="#74849a",
+            font=("Segoe UI Semibold", 8),
+        )
+        detail_header.pack(anchor="w", pady=(13, 6))
+        log_actions = tk.Frame(log_card, bg=self.SURFACE)
+        log_actions.pack(fill="x")
         self.log_detail = tk.Text(
             log_actions,
             height=4,
             wrap="word",
-            bg="#101820",
+            bg=self.SURFACE_ALT,
             fg=self.TEXT,
             insertbackground=self.TEXT,
             relief="flat",
-            padx=10,
-            pady=8,
+            padx=13,
+            pady=10,
             font=("Segoe UI", 9),
+            selectbackground="#35557e",
         )
-        self.log_detail.pack(side="left", fill="both", expand=True, padx=(0, 10))
+        self.log_detail.pack(side="left", fill="both", expand=True, padx=(0, 12))
         self.log_detail.insert("1.0", "Selecione uma avaliação para ver o motivo e o link.")
         self.log_detail.configure(state="disabled")
-        action_buttons = tk.Frame(log_actions, bg=self.PANEL)
+        action_buttons = tk.Frame(log_actions, bg=self.SURFACE)
         action_buttons.pack(side="right", fill="y")
-        tk.Button(
+        self._make_button(
             action_buttons,
             text="ATUALIZAR",
             command=self.load_log,
-            bg="#526979",
-            fg=self.TEXT,
-            activebackground="#678295",
-            relief="flat",
-            font=("Segoe UI", 9, "bold"),
-            padx=14,
-            pady=7,
-            cursor="hand2",
+            background="#26364c",
+            hover="#31445e",
+            foreground="#d6deea",
         ).pack(fill="x", pady=(0, 6))
-        tk.Button(
+        self._make_button(
             action_buttons,
             text="ABRIR LINK",
             command=self.open_selected_link,
-            bg="#2f81b7",
-            fg=self.TEXT,
-            activebackground="#4297cf",
-            relief="flat",
-            font=("Segoe UI", 9, "bold"),
-            padx=14,
-            pady=7,
-            cursor="hand2",
+            background=self.BLUE,
+            hover=self.BLUE_HOVER,
+            foreground="#071521",
         ).pack(fill="x")
+
+        tk.Label(
+            container,
+            text="Histórico salvo apenas neste computador  •  Atualização automática a cada 3 s",
+            bg=self.BACKGROUND,
+            fg="#637187",
+            font=("Segoe UI", 8),
+        ).pack(anchor="e", pady=(9, 0))
 
         self.refresh_status()
         self.refresh_log()
+
+    def _make_button(
+        self,
+        parent: tk.Misc,
+        *,
+        text: str,
+        command: object,
+        background: str,
+        hover: str,
+        foreground: str,
+    ) -> tk.Button:
+        button = tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=background,
+            fg=foreground,
+            activebackground=hover,
+            activeforeground=foreground,
+            disabledforeground="#68778c",
+            relief="flat",
+            bd=0,
+            highlightthickness=0,
+            font=("Segoe UI Semibold", 9),
+            padx=18,
+            pady=10,
+            cursor="hand2",
+        )
+        button.bind("<Enter>", lambda _event: button.configure(bg=hover))
+        button.bind("<Leave>", lambda _event: button.configure(bg=background))
+        return button
 
     def refresh_status(self) -> None:
         if self.busy:
@@ -401,14 +512,27 @@ class AiControlWindow:
         configured = read_ai_enabled()
         active = health.get("ai_curation") if health else configured
         if active is True:
-            self.ai_status.configure(text="IA ATIVADA", fg=self.GREEN)
+            self.ai_status.configure(
+                text="●  IA ATIVADA",
+                fg=self.GREEN,
+                bg=self.GREEN_SOFT,
+            )
         elif active is False:
-            self.ai_status.configure(text="IA DESATIVADA", fg=self.RED)
+            self.ai_status.configure(
+                text="●  IA DESATIVADA",
+                fg=self.RED,
+                bg=self.RED_SOFT,
+            )
         else:
-            self.ai_status.configure(text="ESTADO DESCONHECIDO", fg=self.MUTED)
+            self.ai_status.configure(
+                text="●  ESTADO DESCONHECIDO",
+                fg=self.MUTED,
+                bg=self.SURFACE,
+            )
         self.bot_status.configure(
-            text="BOT ONLINE" if health else "BOT OFFLINE",
+            text="●  BOT ONLINE" if health else "●  BOT OFFLINE",
             fg=self.GREEN if health else self.RED,
+            bg=self.GREEN_SOFT if health else self.RED_SOFT,
         )
         self.root.after(3000, self.refresh_status)
 
@@ -508,8 +632,16 @@ class AiControlWindow:
         self.busy = True
         self.enable_button.configure(state="disabled")
         self.disable_button.configure(state="disabled")
-        self.ai_status.configure(text="APLICANDO...", fg=self.MUTED)
-        self.bot_status.configure(text="Reiniciando o bot", fg=self.MUTED)
+        self.ai_status.configure(
+            text="●  APLICANDO...",
+            fg=self.MUTED,
+            bg=self.SURFACE,
+        )
+        self.bot_status.configure(
+            text="●  REINICIANDO BOT",
+            fg=self.MUTED,
+            bg=self.SURFACE,
+        )
         threading.Thread(target=self._apply, args=(enabled,), daemon=True).start()
 
     def _apply(self, enabled: bool) -> None:
