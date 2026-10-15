@@ -2,6 +2,7 @@ import asyncio
 import logging
 import re
 import unicodedata
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from decimal import Decimal
 
@@ -12,6 +13,8 @@ from isso_facilita.providers.base import MarketplaceProvider
 from isso_facilita.publishers.base import Publisher
 
 logger = logging.getLogger(__name__)
+
+AiDecisionRecorder = Callable[[Product, CurationResult | None, bool | None, int, str], None]
 
 TECH_KEYWORDS = {
     "ssd",
@@ -382,6 +385,7 @@ class PromotionService:
         ai_relevance_threshold: int = 75,
         max_ai_evaluations_per_run: int = 6,
         character_priorities: dict[str, float] | None = None,
+        ai_decision_recorder: AiDecisionRecorder | None = None,
     ) -> None:
         self.providers = providers
         self.publisher = publisher
@@ -397,7 +401,32 @@ class PromotionService:
             normalize(keyword): weight
             for keyword, weight in (character_priorities or {}).items()
         }
+        self.ai_decision_recorder = ai_decision_recorder
         self._run_lock = asyncio.Lock()
+
+    def _record_ai_decision(
+        self,
+        product: Product,
+        curation: CurationResult | None,
+        accepted: bool | None,
+        error_message: str = "",
+    ) -> None:
+        if not self.ai_decision_recorder:
+            return
+        try:
+            self.ai_decision_recorder(
+                product,
+                curation,
+                accepted,
+                self.ai_relevance_threshold,
+                error_message,
+            )
+        except Exception:
+            logger.exception(
+                "Falha ao registrar a decisão da IA para %s:%s",
+                product.marketplace,
+                product.product_id,
+            )
 
     async def run(self) -> RunResult:
         async with self._run_lock:
@@ -474,19 +503,22 @@ class PromotionService:
                     ) % len(eligible)
                     try:
                         curation = await self.curator.curate(product)
-                    except Exception:
+                    except Exception as error:
                         result.failures += 1
                         result.ai_failures += 1
+                        self._record_ai_decision(product, None, None, str(error))
                         logger.exception(
                             "Falha na curadoria por IA de %s:%s",
                             product.marketplace,
                             product.product_id,
                         )
                         continue
-                    if (
-                        not curation.relevant
-                        or curation.relevance_score < self.ai_relevance_threshold
-                    ):
+                    accepted = (
+                        curation.relevant
+                        and curation.relevance_score >= self.ai_relevance_threshold
+                    )
+                    self._record_ai_decision(product, curation, accepted)
+                    if not accepted:
                         result.ai_rejected += 1
                         continue
                 message = compose_message(product, curation)

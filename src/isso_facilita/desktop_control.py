@@ -7,10 +7,14 @@ import subprocess
 import threading
 import time
 import tkinter as tk
+import webbrowser
 from pathlib import Path
-from tkinter import messagebox
+from tkinter import messagebox, ttk
 from urllib.error import URLError
+from urllib.parse import urlparse
 from urllib.request import urlopen
+
+from isso_facilita.ai_audit import read_ai_decisions
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ENV_PATH = PROJECT_ROOT / ".env"
@@ -182,12 +186,13 @@ class AiControlWindow:
     def __init__(self, root: tk.Tk) -> None:
         self.root = root
         self.busy = False
+        self.log_records: dict[str, dict[str, object]] = {}
         root.title("Isso Facilita — Controle da IA")
-        root.geometry("460x330")
-        root.resizable(False, False)
+        root.geometry("1080x720")
+        root.minsize(860, 600)
         root.configure(bg=self.BACKGROUND)
 
-        panel = tk.Frame(root, bg=self.PANEL, padx=28, pady=26)
+        panel = tk.Frame(root, bg=self.PANEL, padx=24, pady=20)
         panel.pack(fill="both", expand=True, padx=18, pady=18)
 
         tk.Label(
@@ -262,9 +267,132 @@ class AiControlWindow:
             fg=self.MUTED,
             font=("Segoe UI", 8),
         )
-        self.detail.pack(pady=(18, 0))
+        self.detail.pack(pady=(14, 12))
+
+        tk.Frame(panel, bg="#2a3a46", height=1).pack(fill="x", pady=(0, 12))
+        log_header = tk.Frame(panel, bg=self.PANEL)
+        log_header.pack(fill="x", pady=(0, 8))
+        tk.Label(
+            log_header,
+            text="AVALIAÇÕES DA IA",
+            bg=self.PANEL,
+            fg=self.TEXT,
+            font=("Segoe UI", 11, "bold"),
+        ).pack(side="left")
+        self.log_summary = tk.Label(
+            log_header,
+            text="Carregando histórico...",
+            bg=self.PANEL,
+            fg=self.MUTED,
+            font=("Segoe UI", 9),
+        )
+        self.log_summary.pack(side="right")
+
+        style = ttk.Style(root)
+        style.configure(
+            "AiLog.Treeview",
+            background="#101820",
+            fieldbackground="#101820",
+            foreground=self.TEXT,
+            rowheight=27,
+            borderwidth=0,
+            font=("Segoe UI", 9),
+        )
+        style.configure(
+            "AiLog.Treeview.Heading",
+            background="#273845",
+            foreground="#101820",
+            font=("Segoe UI", 9, "bold"),
+        )
+        style.map("AiLog.Treeview", background=[("selected", "#35556b")])
+
+        table_frame = tk.Frame(panel, bg=self.PANEL)
+        table_frame.pack(fill="both", expand=True)
+        columns = ("time", "status", "score", "marketplace", "title", "link")
+        self.log_table = ttk.Treeview(
+            table_frame,
+            columns=columns,
+            show="headings",
+            style="AiLog.Treeview",
+            selectmode="browse",
+        )
+        headings = {
+            "time": "Data e hora",
+            "status": "Resultado",
+            "score": "Nota",
+            "marketplace": "Origem",
+            "title": "Produto",
+            "link": "Link afiliado",
+        }
+        widths = {
+            "time": 145,
+            "status": 85,
+            "score": 55,
+            "marketplace": 85,
+            "title": 315,
+            "link": 280,
+        }
+        for column in columns:
+            self.log_table.heading(column, text=headings[column])
+            self.log_table.column(column, width=widths[column], minwidth=50, anchor="w")
+        self.log_table.tag_configure("accepted", foreground="#62d89b")
+        self.log_table.tag_configure("rejected", foreground="#ff8a87")
+        self.log_table.tag_configure("error", foreground="#f2c66d")
+        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.log_table.yview)
+        self.log_table.configure(yscrollcommand=scrollbar.set)
+        self.log_table.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        self.log_table.bind("<<TreeviewSelect>>", self.show_selected_log)
+        self.log_table.bind("<Double-1>", self.open_selected_link)
+
+        log_actions = tk.Frame(panel, bg=self.PANEL)
+        log_actions.pack(fill="x", pady=(10, 0))
+        self.log_detail = tk.Text(
+            log_actions,
+            height=4,
+            wrap="word",
+            bg="#101820",
+            fg=self.TEXT,
+            insertbackground=self.TEXT,
+            relief="flat",
+            padx=10,
+            pady=8,
+            font=("Segoe UI", 9),
+        )
+        self.log_detail.pack(side="left", fill="both", expand=True, padx=(0, 10))
+        self.log_detail.insert("1.0", "Selecione uma avaliação para ver o motivo e o link.")
+        self.log_detail.configure(state="disabled")
+        action_buttons = tk.Frame(log_actions, bg=self.PANEL)
+        action_buttons.pack(side="right", fill="y")
+        tk.Button(
+            action_buttons,
+            text="ATUALIZAR",
+            command=self.load_log,
+            bg="#526979",
+            fg=self.TEXT,
+            activebackground="#678295",
+            relief="flat",
+            font=("Segoe UI", 9, "bold"),
+            padx=14,
+            pady=7,
+            cursor="hand2",
+        ).pack(fill="x", pady=(0, 6))
+        tk.Button(
+            action_buttons,
+            text="ABRIR LINK",
+            command=self.open_selected_link,
+            bg="#2f81b7",
+            fg=self.TEXT,
+            activebackground="#4297cf",
+            relief="flat",
+            font=("Segoe UI", 9, "bold"),
+            padx=14,
+            pady=7,
+            cursor="hand2",
+        ).pack(fill="x")
 
         self.refresh_status()
+        self.refresh_log()
 
     def refresh_status(self) -> None:
         if self.busy:
@@ -283,6 +411,96 @@ class AiControlWindow:
             fg=self.GREEN if health else self.RED,
         )
         self.root.after(3000, self.refresh_status)
+
+    def refresh_log(self) -> None:
+        self.load_log()
+        self.root.after(3000, self.refresh_log)
+
+    def load_log(self) -> None:
+        selected_key = None
+        selection = self.log_table.selection()
+        if selection:
+            selected = self.log_records.get(selection[0], {})
+            selected_key = (selected.get("timestamp"), selected.get("product_id"))
+
+        entries = read_ai_decisions()
+        self.log_table.delete(*self.log_table.get_children())
+        self.log_records.clear()
+        counts = {"accepted": 0, "rejected": 0, "error": 0}
+        selected_item = None
+        labels = {"accepted": "ACEITO", "rejected": "RECUSADO", "error": "ERRO"}
+        for index, entry in enumerate(entries):
+            status = str(entry.get("status", "error"))
+            counts[status] = counts.get(status, 0) + 1
+            item_id = f"decision-{index}"
+            timestamp = str(entry.get("timestamp", "")).replace("T", " ")
+            score = entry.get("score")
+            values = (
+                timestamp[:19],
+                labels.get(status, status.upper()),
+                "—" if score is None else str(score),
+                str(entry.get("marketplace", "")).title(),
+                str(entry.get("title", "")),
+                str(entry.get("affiliate_url", "")),
+            )
+            self.log_table.insert("", "end", iid=item_id, values=values, tags=(status,))
+            self.log_records[item_id] = entry
+            if selected_key == (entry.get("timestamp"), entry.get("product_id")):
+                selected_item = item_id
+
+        self.log_summary.configure(
+            text=(
+                f"{counts['accepted']} aceitos · {counts['rejected']} recusados"
+                f" · {counts['error']} erros"
+            )
+            if entries
+            else "Nenhuma avaliação registrada ainda"
+        )
+        if selected_item:
+            self.log_table.selection_set(selected_item)
+            self.log_table.see(selected_item)
+
+    def show_selected_log(self, _event: object | None = None) -> None:
+        selection = self.log_table.selection()
+        if not selection:
+            return
+        entry = self.log_records.get(selection[0])
+        if not entry:
+            return
+        status_labels = {"accepted": "ACEITO", "rejected": "RECUSADO", "error": "ERRO"}
+        status = status_labels.get(str(entry.get("status")), "DESCONHECIDO")
+        score = entry.get("score")
+        threshold = entry.get("threshold")
+        score_text = "sem nota" if score is None else f"nota {score} / corte {threshold}"
+        detail = (
+            f"{status} · {score_text}\n"
+            f"Motivo: {entry.get('reason') or 'não informado'}\n"
+            f"Link: {entry.get('affiliate_url') or 'não disponível'}"
+        )
+        self.log_detail.configure(state="normal")
+        self.log_detail.delete("1.0", "end")
+        self.log_detail.insert("1.0", detail)
+        self.log_detail.configure(state="disabled")
+
+    def open_selected_link(self, _event: object | None = None) -> None:
+        selection = self.log_table.selection()
+        if not selection:
+            messagebox.showinfo(
+                "Isso Facilita",
+                "Selecione uma avaliação para abrir o link.",
+                parent=self.root,
+            )
+            return
+        link = str(self.log_records.get(selection[0], {}).get("affiliate_url", ""))
+        parsed = urlparse(link)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            messagebox.showerror(
+                "Isso Facilita",
+                "Este item não possui um link válido.",
+                parent=self.root,
+            )
+            return
+        webbrowser.open(link)
 
     def set_enabled(self, enabled: bool) -> None:
         if self.busy:

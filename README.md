@@ -111,7 +111,12 @@ powershell -ExecutionPolicy Bypass -File scripts\install_windows_ai_control.ps1
 
 Abra **Isso Facilita - Controle da IA** e use **ATIVAR IA** ou **DESATIVAR IA**. O
 painel confirma tanto o estado efetivamente carregado pelo bot quanto se ele está
-online. Para remover apenas os atalhos:
+online. A tabela **Avaliações da IA** é atualizada automaticamente e mostra o link,
+pontuação e motivo de cada produto aceito ou recusado. Selecione uma linha para ver os
+detalhes ou abrir o link afiliado. O histórico começa a ser armazenado localmente em
+`data/ai-curation.jsonl` depois desta versão e não é enviado ao Git.
+
+Para remover apenas os atalhos:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\uninstall_windows_ai_control.ps1

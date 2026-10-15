@@ -1,3 +1,4 @@
+from isso_facilita.ai_audit import record_ai_decision
 from isso_facilita.config import Settings
 from isso_facilita.curation import OllamaCurator, OpenAICurator, load_brand_identity
 from isso_facilita.db import PublicationRepository
@@ -51,4 +52,5 @@ def build_service(settings: Settings) -> PromotionService:
         ai_relevance_threshold=settings.ai_relevance_threshold,
         max_ai_evaluations_per_run=settings.max_ai_evaluations_per_run,
         character_priorities=character_priorities,
+        ai_decision_recorder=record_ai_decision if curator else None,
     )

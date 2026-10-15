@@ -124,6 +124,7 @@ def test_technology_filter_rejects_tarot_with_mouse_in_title() -> None:
 @pytest.mark.asyncio
 async def test_ai_curation_can_reject_a_keyword_match(tmp_path) -> None:
     publisher = FakePublisher()
+    decisions: list[tuple[Product, CurationResult | None, bool | None, int, str]] = []
     service = PromotionService(
         providers=[FakeProvider()],
         publisher=publisher,
@@ -132,6 +133,7 @@ async def test_ai_curation_can_reject_a_keyword_match(tmp_path) -> None:
         max_offers_per_run=5,
         curator=RejectingCurator(),
         ai_relevance_threshold=75,
+        ai_decision_recorder=lambda *decision: decisions.append(decision),
     )
 
     result = await service.run()
@@ -139,6 +141,33 @@ async def test_ai_curation_can_reject_a_keyword_match(tmp_path) -> None:
     assert result.published == 0
     assert result.ai_rejected == 1
     assert publisher.messages == []
+    assert len(decisions) == 1
+    assert decisions[0][0].affiliate_url == "https://example.com/affiliate"
+    assert decisions[0][2] is False
+    assert decisions[0][3] == 75
+
+
+@pytest.mark.asyncio
+async def test_ai_audit_failure_does_not_change_curation_result(tmp_path) -> None:
+    def failing_recorder(*_args: object) -> None:
+        raise OSError("disco indisponível")
+
+    service = PromotionService(
+        providers=[FakeProvider()],
+        publisher=FakePublisher(),
+        repository=PublicationRepository(tmp_path / "offers.db"),
+        min_discount_percent=20,
+        max_offers_per_run=5,
+        curator=RejectingCurator(),
+        ai_relevance_threshold=75,
+        ai_decision_recorder=failing_recorder,
+    )
+
+    result = await service.run()
+
+    assert result.ai_evaluated == 1
+    assert result.ai_rejected == 1
+    assert result.failures == 0
 
 
 @pytest.mark.asyncio
