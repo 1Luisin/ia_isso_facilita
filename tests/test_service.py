@@ -5,6 +5,7 @@ from isso_facilita.models import Product
 from isso_facilita.service import (
     classify_content_bucket,
     compose_message,
+    is_hard_rejected,
     is_technology,
     order_for_editorial_rotation,
 )
@@ -33,7 +34,32 @@ def test_recognizes_technology_with_accents() -> None:
     assert is_technology(product(title="Memória RAM DDR5 para computador"))
     assert is_technology(product(title="Figura decorativa Kuromi Sanrio kawaii"))
     assert is_technology(product(title="Action figure de personagem de anime chibi"))
+    assert is_technology(product(title="8BitDo wireless gaming controller"))
+    assert is_technology(product(title="Anime keycaps for mechanical keyboard"))
     assert not is_technology(product(title="Tênis esportivo"))
+
+
+def test_hard_rejects_incompatible_categories_and_expensive_offers() -> None:
+    rejected_titles = (
+        "Placa de expansão PCIe para servidor com múltiplas GPUs",
+        "Placa base para Raspberry Pi 5",
+        "Mini PC industrial sem ventoinha",
+        "PC gamer completo com gabinete e monitor",
+        "Manguito de pressão arterial NIBP",
+        "Microfone UHF duplo para karaokê",
+        "Microfone sem fio UHF de dois canais",
+        "Meias de cosplay de anime",
+        "Kit de pintura a óleo para tela",
+    )
+
+    assert all(is_hard_rejected(product(title=title)) for title in rejected_titles)
+    assert is_hard_rejected(product(title="Teclado mecânico", price=Decimal("500.01")))
+    assert not is_hard_rejected(
+        product(title="Microfone USB condensador para mesa", price=Decimal("199"))
+    )
+    assert not is_hard_rejected(
+        product(title="Controle gamer sem fio 8BitDo", price=Decimal("251.19"))
+    )
 
 
 def test_promotional_message_contains_prices_discount_and_affiliate_link() -> None:

@@ -28,6 +28,7 @@ def build_service(settings: Settings) -> PromotionService:
             curator = OllamaCurator(
                 model=settings.ollama_model,
                 identity_path=settings.brand_identity_path,
+                feedback_path=settings.editorial_feedback_path,
                 api_url=settings.ollama_api_url,
                 timeout_seconds=settings.ollama_timeout_seconds,
                 use_product_images=settings.ollama_use_product_images,
@@ -37,6 +38,7 @@ def build_service(settings: Settings) -> PromotionService:
                 api_key=settings.openai_api_key,
                 model=settings.openai_model,
                 identity_path=settings.brand_identity_path,
+                feedback_path=settings.editorial_feedback_path,
                 api_url=settings.openai_api_url,
                 timeout_seconds=settings.openai_timeout_seconds,
             )
@@ -51,6 +53,8 @@ def build_service(settings: Settings) -> PromotionService:
         curator=curator,
         ai_relevance_threshold=settings.ai_relevance_threshold,
         max_ai_evaluations_per_run=settings.max_ai_evaluations_per_run,
+        max_product_price_brl=settings.max_product_price_brl,
+        require_ai_for_publication=not settings.dry_run,
         character_priorities=character_priorities,
         ai_decision_recorder=record_ai_decision if curator else None,
     )

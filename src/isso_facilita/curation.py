@@ -25,6 +25,8 @@ FORBIDDEN_COPY_TERMS = (
     "produto incrivel",
     "produto incrível",
     "une estilo e funcionalidade",
+    "em destaque",
+    "seleção da curadoria da isso facilita",
 )
 
 
@@ -50,6 +52,15 @@ def load_brand_identity(path: Path) -> dict[str, object]:
         raise CurationError(f"Não foi possível carregar a identidade da marca: {path}") from exc
 
 
+def load_editorial_feedback(path: Path) -> dict[str, object]:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise CurationError(
+            f"Não foi possível carregar o aprendizado editorial: {path}"
+        ) from exc
+
+
 def _output_text(payload: dict[str, object]) -> str:
     for item in payload.get("output", []):  # type: ignore[union-attr]
         if not isinstance(item, dict) or item.get("type") != "message":
@@ -68,9 +79,15 @@ def _validate_copy(product: Product, result: CurationResult) -> CurationResult:
     if not result.relevant:
         return result
 
-    headline = _normalize_collectible_terms(product, result.headline.strip())
-    description = _normalize_collectible_terms(product, result.description.strip())
-    product_name = _normalize_collectible_terms(product, result.product_name.strip())
+    headline = _normalize_editorial_terms(
+        product, _normalize_collectible_terms(product, result.headline.strip())
+    )
+    description = _normalize_editorial_terms(
+        product, _normalize_collectible_terms(product, result.description.strip())
+    )
+    product_name = _normalize_editorial_terms(
+        product, _normalize_collectible_terms(product, result.product_name.strip())
+    )
     if not headline or not description:
         raise CurationError("A IA retornou uma descrição vazia")
     if len(headline) > 90 or len(description) > 220 or len(product_name) > 100:
@@ -168,15 +185,25 @@ def _normalize_collectible_terms(product: Product, text: str) -> str:
     else:
         return text
     normalized = re.sub(
-        r"(?<!\w)(?:action\s+figure|figuras?|bonecos?|bonecas?)(?!\w)",
+        r"(?<!\w)(?:action\s+figure|figures?|figuras?|bonecos?|bonecas?)(?!\w)",
         replacement,
         text,
         flags=re.I,
     )
+    normalized = re.sub(
+        r"\bFigure\s+de\s+A[cç][aã]o\b", "Action Figure", normalized, flags=re.I
+    )
     return re.sub(r"\bFigure\s+Figure\b", "Action Figure", normalized, flags=re.I)
 
 
-def _curation_instructions(identity: dict[str, object]) -> str:
+def _normalize_editorial_terms(product: Product, text: str) -> str:
+    del product
+    return re.sub(r"(?<!\w)laptops?(?!\w)", "notebook", text, flags=re.I)
+
+
+def _curation_instructions(
+    identity: dict[str, object], feedback: dict[str, object] | None = None
+) -> str:
     return (
         "Você é a curadora editorial da página brasileira Isso Facilita. "
         "Avalie produtos com rigor e escreva uma copy curta seguindo a identidade fornecida. "
@@ -257,7 +284,22 @@ def _curation_instructions(identity: dict[str, object]) -> str:
         "evite 'para seu setup' e evite repetir 'gancho ajustável'. Uma boa direção é: "
         "'Som sem fio para acompanhar seu ritmo ✦' e 'Modelo OWS esportivo com gancho "
         "ajustável e estojo de carregamento.'. "
-        f"Identidade editorial: {json.dumps(identity, ensure_ascii=False)}"
+        "Nunca aprove produtos acima de R$ 500. Rejeite computadores completos, mini PCs, "
+        "placas de expansão ou servidor, acessórios para Raspberry Pi/Compute Module, "
+        "produtos médicos ou de pressão arterial, roupas/meias de cosplay, kits de pintura "
+        "e microfones UHF de palco ou karaokê. Microfones USB de mesa para streaming podem "
+        "ser aceitos. Dê prioridade a keycaps, teclados mecânicos ou magnéticos, mouses gamer, "
+        "controles, mousepads/deskmat de estética clean, fofa ou coerente, iluminação de "
+        "monitor, acessórios úteis de mesa e colecionáveis reconhecíveis. Carregadores e "
+        "capas genéricas têm baixa prioridade. Naruto e Dragon Ball não são proibidos, mas "
+        "devem perder prioridade para personagens atuais, jogos gacha e franquias em alta. "
+        "Ao avaliar mousepads, rejeite estampas visualmente genéricas, gritantes ou muito "
+        "carregadas; prefira pastel, clean, fofo ou anime/jogo com composição bem resolvida. "
+        "Escreva sempre 'Action Figure', nunca 'Figure de Ação', e use 'notebook', nunca "
+        "'laptop'. A copy deve ser específica: nunca use 'em destaque' nem 'seleção da "
+        "curadoria da Isso Facilita' como substituto de uma descrição real. "
+        f"Identidade editorial: {json.dumps(identity, ensure_ascii=False)}. "
+        f"Aprendizado editorial do proprietário: {json.dumps(feedback or {}, ensure_ascii=False)}"
     )
 
 
@@ -272,6 +314,17 @@ def _compact_identity(identity: dict[str, object]) -> dict[str, object]:
         "preferred_products": identity.get("preferred_products", []),
         "reject_products": identity.get("reject_products", []),
         "character_trends": identity.get("character_trends", {}),
+    }
+
+
+def _compact_feedback(feedback: dict[str, object]) -> dict[str, object]:
+    return {
+        "hard_reject": feedback.get("hard_reject", []),
+        "strong_positive": feedback.get("strong_positive", []),
+        "lower_priority": feedback.get("lower_priority", []),
+        "visual_profile": feedback.get("visual_profile", []),
+        "copy_rules": feedback.get("copy_rules", []),
+        "reference_examples": feedback.get("reference_examples", []),
     }
 
 
@@ -354,38 +407,6 @@ def _parse_ollama_result(product: Product, response_text: str) -> CurationResult
     return _validate_copy(product, result)
 
 
-def _minimal_ollama_result(product: Product, response_text: str) -> CurationResult:
-    result = _decode_ollama_result(response_text)
-    if not result.relevant:
-        return _validate_copy(product, result)
-
-    product_name = result.product_name
-    for term in FORBIDDEN_COPY_TERMS:
-        product_name = re.sub(re.escape(term), "", product_name, flags=re.IGNORECASE)
-    official_numbers = set(re.findall(r"\d+(?:[.,]\d+)?", product.title))
-    product_name = re.sub(
-        r"\d+(?:[.,]\d+)?",
-        lambda match: match.group(0) if match.group(0) in official_numbers else "",
-        product_name,
-    )
-    product_name = re.sub(r"\s+", " ", product_name).strip(" ,.:;-")[:70].rstrip()
-    if not product_name:
-        raise CurationError("O Ollama não identificou um nome seguro para o produto")
-    if result.category not in {"tech", "general"}:
-        raise CurationError("A IA retornou uma categoria editorial inválida")
-
-    product_name = _normalize_collectible_terms(product, product_name)
-    return CurationResult(
-        relevant=True,
-        relevance_score=100,
-        headline=f"{product_name} em destaque ✦",
-        description=f"{product_name}: seleção da curadoria da Isso Facilita.",
-        reason="Copy simplificada após a validação da resposta local.",
-        category=result.category,
-        product_name=product_name,
-    )
-
-
 class OpenAICurator:
     schema = {
         "type": "object",
@@ -434,6 +455,7 @@ class OpenAICurator:
         api_key: str,
         model: str,
         identity_path: Path,
+        feedback_path: Path | None = None,
         api_url: str = "https://api.openai.com/v1",
         timeout_seconds: float = 45,
         transport: httpx.AsyncBaseTransport | None = None,
@@ -443,12 +465,17 @@ class OpenAICurator:
         self.api_key = api_key
         self.model = model
         self.identity = load_brand_identity(identity_path)
+        self.feedback = (
+            _compact_feedback(load_editorial_feedback(feedback_path))
+            if feedback_path
+            else {}
+        )
         self.url = f"{api_url.rstrip('/')}/responses"
         self.timeout_seconds = timeout_seconds
         self.transport = transport
 
     async def curate(self, product: Product) -> CurationResult:
-        instructions = _curation_instructions(self.identity)
+        instructions = _curation_instructions(self.identity, self.feedback)
         product_context = _product_context(product)
         request = {
             "model": self.model,
@@ -535,6 +562,7 @@ class OllamaCurator:
         self,
         model: str,
         identity_path: Path,
+        feedback_path: Path | None = None,
         api_url: str = "http://127.0.0.1:11434",
         timeout_seconds: float = 180,
         use_product_images: bool = False,
@@ -542,13 +570,18 @@ class OllamaCurator:
     ) -> None:
         self.model = model
         self.identity = _compact_identity(load_brand_identity(identity_path))
+        self.feedback = (
+            _compact_feedback(load_editorial_feedback(feedback_path))
+            if feedback_path
+            else {}
+        )
         self.url = f"{api_url.rstrip('/')}/api/chat"
         self.timeout_seconds = timeout_seconds
         self.use_product_images = use_product_images
         self.transport = transport
 
     async def curate(self, product: Product) -> CurationResult:
-        instructions = _curation_instructions(self.identity)
+        instructions = _curation_instructions(self.identity, self.feedback)
         product_context = _product_context(product)
         schema_text = json.dumps(self.schema, ensure_ascii=False)
         user_message: dict[str, object] = {
@@ -600,10 +633,7 @@ class OllamaCurator:
                     },
                 ]
                 repaired = await self._request(client, request)
-        try:
-            return _parse_ollama_result(product, repaired)
-        except CurationError:
-            return _minimal_ollama_result(product, repaired)
+        return _parse_ollama_result(product, repaired)
 
     async def _load_product_image(
         self, client: httpx.AsyncClient, image_url: str

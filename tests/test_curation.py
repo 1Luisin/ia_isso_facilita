@@ -251,7 +251,7 @@ async def test_ollama_repairs_unsupported_copy_once(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ollama_uses_safe_minimal_copy_after_two_invalid_attempts(tmp_path) -> None:
+async def test_ollama_rejects_product_after_two_invalid_copy_attempts(tmp_path) -> None:
     async def handler(_: httpx.Request) -> httpx.Response:
         content = {
             "relevant": True,
@@ -272,11 +272,8 @@ async def test_ollama_uses_safe_minimal_copy_after_two_invalid_attempts(tmp_path
         transport=httpx.MockTransport(handler),
     )
 
-    result = await curator.curate(product())
-
-    assert result.relevant
-    assert result.headline == "Fones de ouvido em destaque ✦"
-    assert result.description == "Fones de ouvido: seleção da curadoria da Isso Facilita."
+    with pytest.raises(CurationError, match="genérica ou proibida"):
+        await curator.curate(product())
 
 
 @pytest.mark.asyncio
@@ -350,6 +347,36 @@ def test_copy_uses_action_figure_instead_of_portuguese_figura() -> None:
     assert "Action Figure" in result.headline
     assert "Action Figure" in result.description
     assert "Figura" not in result.description
+
+
+def test_copy_normalizes_figure_de_acao_and_laptop() -> None:
+    item = Product(
+        marketplace="aliexpress",
+        product_id="figure",
+        title="Figure colecionável com suporte para laptop",
+        product_url="https://example.com/item",
+        affiliate_url="https://example.com/affiliate",
+        image_url="",
+        price=Decimal("120"),
+        original_price=Decimal("150"),
+    )
+    result = _validate_copy(
+        item,
+        CurationResult(
+            relevant=True,
+            relevance_score=100,
+            headline="Figure de Ação para decorar ao lado do laptop ✦",
+            product_name="Figure de Ação",
+            description="Figure de Ação colecionável com suporte para laptop.",
+            reason="Colecionável alinhado.",
+            category="general",
+        ),
+    )
+
+    assert "Figure de Ação" not in result.headline
+    assert "Action Figure" in result.headline
+    assert "laptop" not in result.description.casefold()
+    assert "notebook" in result.description.casefold()
 
 
 def test_copy_rejects_kawaii_as_generic_published_word() -> None:

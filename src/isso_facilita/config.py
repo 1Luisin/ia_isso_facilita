@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     ai_relevance_threshold: int = Field(default=75, ge=0, le=100)
     max_ai_evaluations_per_run: int = Field(default=6, ge=1, le=30)
     brand_identity_path: Path = Path("config/brand_identity.json")
+    editorial_feedback_path: Path = Path("config/editorial_feedback.json")
+    max_product_price_brl: float = Field(default=500, gt=0)
     ollama_model: str = "qwen3-vl:2b-instruct"
     ollama_use_product_images: bool = True
     ollama_api_url: str = "http://127.0.0.1:11434"
@@ -42,9 +44,13 @@ class Settings(BaseSettings):
     aliexpress_tracking_id: str = ""
     aliexpress_api_url: str = "https://api-sg.aliexpress.com/sync"
     aliexpress_keywords: str = (
-        "mechanical keyboard,keycaps,wireless mouse,deskmat,monitor light bar,"
-        "monitor arm,laptop stand,usb hub,microphone,bluetooth headphones,gan charger,"
-        "ssd nvme,portable monitor,anime action figure 25cm,vocaloid action figure,"
+        "mechanical gaming keyboard,magnetic rapid trigger keyboard,anime keycaps,"
+        "genshin impact keycaps,wireless gaming mouse,cute deskmat,pastel deskmat,"
+        "cinnamoroll mouse pad,aesthetic anime mousepad,wireless gaming controller,"
+        "8bitdo controller,monitor light bar,monitor arm,notebook stand,usb hub,"
+        "usb condenser microphone desk,bluetooth headphones,gan charger,ssd nvme 1tb,"
+        "portable monitor,cute keyboard cleaning kit,cute phone stand,"
+        "anime action figure 25cm,vocaloid action figure,"
         "hatsune miku figure,sanrio desk accessory,solo leveling figure,dandadan figure,"
         "my hero academia figure,demon slayer figure,wuthering waves figure,"
         "genshin impact figure,hollow knight silksong figure,clair obscur figure"

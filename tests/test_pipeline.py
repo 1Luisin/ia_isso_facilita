@@ -22,7 +22,7 @@ class FakeProvider(MarketplaceProvider):
                 product_url="https://example.com/product",
                 affiliate_url="https://example.com/affiliate",
                 image_url="",
-                price=Decimal("900"),
+                price=Decimal("450"),
                 original_price=Decimal("1200"),
             )
         ]
@@ -145,6 +145,26 @@ async def test_ai_curation_can_reject_a_keyword_match(tmp_path) -> None:
     assert decisions[0][0].affiliate_url == "https://example.com/affiliate"
     assert decisions[0][2] is False
     assert decisions[0][3] == 75
+
+
+@pytest.mark.asyncio
+async def test_real_publication_pauses_when_ai_is_disabled(tmp_path) -> None:
+    publisher = FakePublisher()
+    service = PromotionService(
+        providers=[FakeProvider()],
+        publisher=publisher,
+        repository=PublicationRepository(tmp_path / "offers.db"),
+        min_discount_percent=20,
+        max_offers_per_run=1,
+        require_ai_for_publication=True,
+    )
+
+    result = await service.run()
+
+    assert result.ai_paused == 1
+    assert result.discovered == 0
+    assert result.published == 0
+    assert publisher.messages == []
 
 
 @pytest.mark.asyncio
@@ -276,5 +296,5 @@ async def test_pipeline_includes_and_interleaves_regular_price_products(tmp_path
 
     assert result.eligible == 2
     assert result.published == 2
-    assert "25% OFF" in publisher.messages[0]
+    assert "Desconto:" in publisher.messages[0]
     assert "✦ Preço: R$ 150,00" in publisher.messages[1]

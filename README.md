@@ -64,10 +64,10 @@ Copie `.env.example` para `.env` e altere:
 
 ### Curadoria e descrição por IA
 
-A identidade da página fica em `config/brand_identity.json`. Esse arquivo define missão,
-público, tom de voz, símbolos, categorias desejadas, rejeições e exemplos de texto. Na
-maioria dos casos, ajustar esse perfil e os exemplos é mais simples e econômico do que
-treinar um modelo próprio.
+A identidade da página fica em `config/brand_identity.json`. O aprendizado explícito das
+avaliações do proprietário fica em `config/editorial_feedback.json`, separado em produto,
+oferta e qualidade da copy. Esses arquivos definem missão, público, preferências,
+rejeições e referências; não há fine-tuning do modelo.
 
 O provedor padrão é o Ollama, que executa a IA localmente e não exige chave nem
 pagamento por chamada. No computador que ficará ligado:
@@ -90,6 +90,10 @@ oficial, preço, desconto e link afiliado, e rejeita qualquer copy que tente acr
 números que não existam no título do produto. Se a API de IA falhar, aquele produto não
 é publicado e pode ser tentado novamente depois.
 
+No modo real, desligar a IA pausa as publicações automáticas. O bot não recorre a uma
+copy genérica. Ofertas acima de `MAX_PRODUCT_PRICE_BRL` (R$ 500 por padrão) e categorias
+explicitamente incompatíveis são bloqueadas antes de consumir uma avaliação do modelo.
+
 A sequência editorial reserva seis de cada oito posições para setup ou tecnologia,
 uma para Action Figures/colecionáveis de anime e Vocaloid e uma para personagens como
 Sanrio. A rotação fica salva no banco, evitando que descontos altos produzam várias
@@ -99,7 +103,8 @@ o modelo avalia em cada ciclo para controlar o uso de memória e o tempo de proc
 #### Controle desktop da IA no Windows
 
 O controle desktop altera somente `AI_CURATION_ENABLED` no `.env`. Ao ativar ou
-desativar a IA, ele reinicia apenas o processo do bot para aplicar a configuração;
+desativar a IA, ele reinicia apenas o processo do bot para aplicar a configuração. No
+modo real, desativar a IA mantém o bot online, porém com publicações pausadas;
 Ollama e a ponte do WhatsApp permanecem ligados. Nenhuma outra configuração, prompt ou
 regra de curadoria é modificada.
 

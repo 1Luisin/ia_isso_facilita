@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "last_reviewed": "2026-10-15",
+  "purpose": "Aprendizado editorial explícito fornecido pelo proprietário. Produto, oferta e qualidade da copy são avaliados separadamente.",
+  "hard_reject": [
+    "qualquer oferta acima de R$ 500",
+    "computador completo, desktop completo ou mini PC",
+    "placa de expansão, placa de servidor, switch PCIe, backplane e acessórios para Raspberry Pi ou Compute Module",
+    "produto médico, manguito ou monitor de pressão arterial",
+    "microfone UHF de palco, karaokê ou kit com microfones de mão; microfone USB de mesa para streaming continua permitido",
+    "meias, roupas ou acessórios de vestuário para cosplay",
+    "kit de pintura, tela decorativa pronta ou material artístico fora do universo de setup",
+    "cabo, régua, placa ou acessório de extensão técnico sem apelo de uso para o público",
+    "copy genérica usada como substituto da análise da IA"
+  ],
+  "strong_positive": [
+    "keycaps bonitas de anime, jogos gacha e personagens reconhecíveis",
+    "teclado mecânico ou magnético com bom preço e visual de setup",
+    "mouse gamer sem fio com bom custo-benefício e visual interessante",
+    "controle gamer de marca ou modelo identificável com preço justo",
+    "mousepad ou deskmat clean, pastel, fofo, de anime ou jogo com composição visual coerente",
+    "barra de luz para monitor e acessórios funcionais que melhoram a mesa",
+    "kit de limpeza para teclado e suporte de celular quando úteis e visualmente alinhados",
+    "Action Figure de personagem relevante, reconhecível e abaixo do teto de preço",
+    "pequenos blocos de montar e colecionáveis fofos com personagens reconhecíveis"
+  ],
+  "lower_priority": [
+    "carregador genérico ou carregador de notebook",
+    "capa genérica para fones ou AirPods",
+    "produto de Naruto ou Dragon Ball sem diferencial visual",
+    "standee, gashapon ou miniatura repetitiva",
+    "produto correto para a categoria, porém caro em comparação com alternativas"
+  ],
+  "visual_profile": [
+    "preferir setup clean, pastel, fofo, soft gaming ou anime aesthetic",
+    "aceitar visual gamer escuro quando o produto é diferenciado e tem bom preço",
+    "rejeitar mousepads genéricos, excessivamente gritantes ou com composição visual carregada",
+    "personagens atuais, jogos famosos, jogos gacha e animes em alta vencem franquias genéricas ou saturadas"
+  ],
+  "copy_rules": [
+    "descrever especificamente o objeto e seus diferenciais confirmados",
+    "nunca publicar apenas 'em destaque' ou 'seleção da curadoria da Isso Facilita'",
+    "usar sempre Action Figure, nunca Figure de Ação",
+    "usar notebook, nunca laptop",
+    "não aprender o texto defeituoso de uma publicação aprovada; aprender apenas a preferência pelo produto"
+  ],
+  "reference_examples": [
+    {
+      "label": "forte positivo",
+      "product": "mousepad grande de setup com arte geométrica rosa, preta ou branca",
+      "product_fit": "alto",
+      "offer_fit": "alto",
+      "reference": "https://pt.aliexpress.com/item/1005008743627549.html"
+    },
+    {
+      "label": "forte positivo",
+      "product": "deskmat preto e branco com estética de anime",
+      "product_fit": "alto",
+      "offer_fit": "alto",
+      "reference": "https://pt.aliexpress.com/item/1005011610845429.html"
+    },
+    {
+      "label": "forte positivo",
+      "product": "controle sem fio 8BitDo Ultimate 2",
+      "product_fit": "alto",
+      "offer_fit": "alto",
+      "reference": "https://pt.aliexpress.com/item/1005003913546013.html"
+    },
+    {
+      "label": "forte positivo",
+      "product": "teclado gamer sem fio RGB FURYCUBR de 98 teclas",
+      "product_fit": "alto",
+      "offer_fit": "alto"
+    },
+    {
+      "label": "forte positivo",
+      "product": "mouse K-SNAKE X11 sem fio com três modos e RGB",
+      "product_fit": "alto",
+      "offer_fit": "alto"
+    },
+    {
+      "label": "forte positivo",
+      "product": "teclado magnético Fire Phoenix com Rapid Trigger",
+      "product_fit": "alto",
+      "offer_fit": "alto"
+    },
+    {
+      "label": "forte positivo",
+      "product": "blocos de montar pequenos de animais e personagens fofos",
+      "product_fit": "alto",
+      "offer_fit": "alto"
+    },
+    {
+      "label": "forte positivo",
+      "product": "mousepad grande do Cinnamoroll em azul claro",
+      "product_fit": "alto",
+      "offer_fit": "alto"
+    },
+    {
+      "label": "forte positivo",
+      "product": "deskmat xadrez pastel com flores para setup clean",
+      "product_fit": "alto",
+      "offer_fit": "alto"
+    },
+    {
+      "label": "produto positivo, oferta rejeitada",
+      "product": "teclado mecânico Honkai Star Rail",
+      "product_fit": "alto",
+      "offer_fit": "rejeitado por preço acima de R$ 500"
+    },
+    {
+      "label": "produto positivo, oferta rejeitada",
+      "product": "mouse gamer de personagem de jogo",
+      "product_fit": "alto",
+      "offer_fit": "rejeitado por preço acima de R$ 500"
+    },
+    {
+      "label": "rejeitado",
+      "product": "placas técnicas PCIe, servidor, Raspberry Pi e Compute Module",
+      "product_fit": "nenhum"
+    },
+    {
+      "label": "rejeitado",
+      "product": "mini PC ou computador completo",
+      "product_fit": "nenhum"
+    },
+    {
+      "label": "rejeitado",
+      "product": "manguito ou monitor de pressão arterial",
+      "product_fit": "nenhum"
+    },
+    {
+      "label": "rejeitado",
+      "product": "kit UHF com dois microfones de mão",
+      "product_fit": "nenhum"
+    },
+    {
+      "label": "médio",
+      "product": "carregador GaN genérico",
+      "product_fit": "baixo apesar de funcional"
+    },
+    {
+      "label": "médio",
+      "product": "Action Figure de Dragon Ball",
+      "product_fit": "aceitável, mas perde prioridade para personagens mais alinhados"
+    },
+    {
+      "label": "forte positivo",
+      "product": "keycaps de Genshin Impact, Honkai Star Rail ou Arknights",
+      "product_fit": "alto"
+    },
+    {
+      "label": "forte positivo",
+      "product": "Action Figure de Hollow Knight, Demon Slayer ou personagens atuais",
+      "product_fit": "alto quando o preço é justo"
+    }
+  ],
+  "evaluated_posts": [
+    {"id": 1, "rating": "aprovado", "product": "barra de luz RGB de 40 cm para monitor", "lesson": "produto funcional, muito interessante e com ótimo desconto"},
+    {"id": 2, "rating": "aprovado", "product": "mouse gamer sem fio Attack Shark X11", "lesson": "periférico bonito, versátil e com excelente preço"},
+    {"id": 3, "rating": "meio aprovado", "product": "carregador GaN de 33 W", "lesson": "tecnologia útil, porém genérica e pouco interessante para compra por impulso"},
+    {"id": 4, "rating": "aprovado", "product": "keycaps Herta e Robin de Honkai Star Rail", "lesson": "keycaps bonitas de personagens relevantes têm forte aderência"},
+    {"id": 5, "rating": "meio aprovado", "product": "Action Figure Ginyu de Dragon Ball Z", "lesson": "boa peça, mas a franquia e o estilo têm prioridade menor"},
+    {"id": 6, "rating": "aprovado", "product": "keycaps de Arknights Endfield", "lesson": "keycaps de jogos gacha interessam diretamente ao nicho"},
+    {"id": 7, "rating": "reprovado", "product": "cabo de extensão", "lesson": "item técnico fora do nicho e copy genérica inaceitável"},
+    {"id": 8, "rating": "aprovado", "product": "mousepad simples com personagem de anime", "lesson": "produto barato e visualmente alinhado pode ser aprovado"},
+    {"id": 9, "rating": "reprovado", "product": "Action Figure acima de R$ 500", "lesson": "oferta fora do orçamento do público"},
+    {"id": 10, "rating": "aprovado", "product": "mousepad de Hollow Knight", "lesson": "bom preço e franquia alinhada"},
+    {"id": 11, "rating": "meio aprovado", "product": "capa de AirPods com Naruto", "lesson": "acessório aceitável, mas genérico e de franquia saturada"},
+    {"id": 12, "rating": "reprovado", "product": "teclado mecânico de R$ 973", "lesson": "produto bom não compensa oferta acima do teto"},
+    {"id": 13, "rating": "aprovado", "product": "Action Figure", "lesson": "usar sempre o termo Action Figure"},
+    {"id": 14, "rating": "aprovado", "product": "mousepad RGB de anime", "lesson": "RGB e preço justo podem compensar uma franquia menos diferenciada"},
+    {"id": 15, "rating": "reprovado", "product": "placa de expansão", "lesson": "produto técnico e caro, sem relação com o nicho"},
+    {"id": 16, "rating": "aprovado", "product": "keycaps de Genshin Impact", "lesson": "personagens bonitos, excelente preço e forte aderência"},
+    {"id": 17, "rating": "aprovado", "product": "Action Figure Hornet de Hollow Knight Silksong", "lesson": "personagem relevante, peça bonita e ótimo preço"},
+    {"id": 18, "rating": "aprovado", "product": "keycaps de personagens de jogos gacha", "lesson": "categoria central com bom preço e desconto"},
+    {"id": 19, "rating": "meio aprovado", "product": "carregador de notebook", "lesson": "usar notebook em vez de laptop; produto útil, mas periférico ao foco"},
+    {"id": 20, "rating": "aprovado", "product": "keycaps de personagem", "lesson": "qualidade percebida pode justificar preço um pouco maior"},
+    {"id": 21, "rating": "aprovado", "product": "Action Figure de Demon Slayer", "lesson": "personagem e qualidade alinhados pelo preço"},
+    {"id": 22, "rating": "aprovado", "product": "keycaps de teclado", "lesson": "produto aprovado, mas a copy precisa ser específica e melhor escrita"}
+  ]
+}

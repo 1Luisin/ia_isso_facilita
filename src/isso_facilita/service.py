@@ -24,7 +24,12 @@ TECH_KEYWORDS = {
     "pc gamer",
     "monitor",
     "teclado",
+    "keyboard",
+    "keycap",
+    "keycaps",
     "mouse",
+    "mousepad",
+    "deskmat",
     "headset",
     "fone",
     "earphone",
@@ -48,8 +53,19 @@ TECH_KEYWORDS = {
     "gpu",
     "webcam",
     "microfone",
+    "microphone",
     "console",
     "controle",
+    "controle gamer",
+    "controller",
+    "gaming controller",
+    "gamepad",
+    "kit de limpeza",
+    "keyboard cleaning kit",
+    "suporte para celular",
+    "phone stand",
+    "blocos de montar",
+    "building blocks",
     "hd externo",
     "pendrive",
 }
@@ -94,6 +110,7 @@ SETUP_KEYWORDS = {
     "monitor",
     "mouse",
     "mousepad",
+    "mouse pad",
     "organizador de cabo",
     "suporte de monitor",
     "suporte para notebook",
@@ -171,6 +188,75 @@ NON_TECH_KEYWORDS = {
     "tarot",
 }
 
+HARD_REJECT_KEYWORDS = {
+    "mini pc",
+    "minipc",
+    "desktop computer",
+    "computador completo",
+    "gaming pc desktop",
+    "pc gamer completo",
+    "all in one computer",
+    "computador all in one",
+    "raspberry pi",
+    "compute module",
+    "placa de expansao",
+    "expansion board",
+    "expansion card",
+    "pcie switch",
+    "gpu server",
+    "server board",
+    "backplane",
+    "blood pressure",
+    "pressao arterial",
+    "monitor de pressao",
+    "manguito de pressao",
+    "sphygmomanometer",
+    "nibp cuff",
+    "microfone uhf",
+    "microfone sem fio uhf",
+    "uhf microphone",
+    "wireless uhf microphone",
+    "dual channel microphone",
+    "microfone karaoke",
+    "meias de cosplay",
+    "cosplay socks",
+    "kit de pintura a oleo",
+    "oil painting kit",
+    "placa de extensao",
+    "cabo de extensao",
+    "extension board",
+    "extension cable",
+    "power strip",
+}
+
+PREFERRED_PRODUCT_KEYWORDS = {
+    "keycap",
+    "keycaps",
+    "deskmat",
+    "mousepad",
+    "mouse pad",
+    "teclado mecanico",
+    "mechanical keyboard",
+    "rapid trigger",
+    "mouse gamer",
+    "gaming mouse",
+    "controle gamer",
+    "gaming controller",
+    "gamepad",
+    "light bar",
+    "kit de limpeza",
+    "keyboard cleaning kit",
+}
+
+LOW_PRIORITY_KEYWORDS = {
+    "carregador",
+    "charger",
+    "capa para airpods",
+    "airpods case",
+    "naruto",
+    "dragon ball",
+}
+
 
 def normalize(text: str) -> str:
     return "".join(
@@ -189,6 +275,15 @@ def is_technology(product: Product) -> bool:
         re.search(rf"(?<!\w){re.escape(keyword)}(?!\w)", title)
         for keyword in accepted_keywords
     )
+
+
+def is_hard_rejected(product: Product, max_product_price_brl: float = 500) -> bool:
+    title = normalize(product.title)
+    if product.currency.upper() == "BRL" and product.price > Decimal(
+        str(max_product_price_brl)
+    ):
+        return True
+    return _contains_keyword(title, HARD_REJECT_KEYWORDS)
 
 
 def is_technology_category(product: Product) -> bool:
@@ -247,6 +342,15 @@ def _product_priority(
         specificity += 20
     if any(term in title for term in ("mecanico", "hot-swap", "pbt", "nvme", "gan")):
         specificity += 15
+    if _contains_keyword(title, PREFERRED_PRODUCT_KEYWORDS):
+        specificity += 30
+    if _contains_keyword(title, LOW_PRIORITY_KEYWORDS):
+        specificity -= 20
+    if product.currency.upper() == "BRL":
+        if product.price <= Decimal("150"):
+            specificity += 15
+        elif product.price <= Decimal("300"):
+            specificity += 8
     if any(term in title for term in ("gashapon", "chaveiro", "acrilico", "standee")):
         specificity -= 15
     return specificity, product.discount_percent
@@ -366,6 +470,7 @@ class RunResult:
     ai_rejected: int = 0
     ai_failures: int = 0
     ai_evaluated: int = 0
+    ai_paused: int = 0
 
     def to_dict(self) -> dict[str, int]:
         return asdict(self)
@@ -386,6 +491,8 @@ class PromotionService:
         max_ai_evaluations_per_run: int = 6,
         character_priorities: dict[str, float] | None = None,
         ai_decision_recorder: AiDecisionRecorder | None = None,
+        max_product_price_brl: float = 500,
+        require_ai_for_publication: bool = False,
     ) -> None:
         self.providers = providers
         self.publisher = publisher
@@ -402,6 +509,8 @@ class PromotionService:
             for keyword, weight in (character_priorities or {}).items()
         }
         self.ai_decision_recorder = ai_decision_recorder
+        self.max_product_price_brl = max_product_price_brl
+        self.require_ai_for_publication = require_ai_for_publication
         self._run_lock = asyncio.Lock()
 
     def _record_ai_decision(
@@ -431,6 +540,12 @@ class PromotionService:
     async def run(self) -> RunResult:
         async with self._run_lock:
             result = RunResult()
+            if self.require_ai_for_publication and self.curator is None:
+                result.ai_paused = 1
+                logger.warning(
+                    "Publicação pausada: a curadoria por IA está desativada no modo real."
+                )
+                return result
             batches = await asyncio.gather(
                 *(provider.discover() for provider in self.providers), return_exceptions=True
             )
@@ -448,6 +563,7 @@ class PromotionService:
                 if product.product_id
                 and product.affiliate_url
                 and product.price > 0
+                and not is_hard_rejected(product, self.max_product_price_brl)
                 and is_technology(product)
                 and (
                     self.include_non_promotional_products
