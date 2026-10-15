@@ -6,6 +6,7 @@ __pycache__/
 .ruff_cache/
 data/*.db
 data/*.db-*
+data/*.log
 whatsapp-web-bridge/node_modules/
 whatsapp-web-bridge/.data/
 whatsapp-web-bridge/.wwebjs_auth/

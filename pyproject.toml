@@ -24,6 +24,7 @@ dev = [
 
 [project.scripts]
 isso-facilita = "isso_facilita.cli:main"
+isso-facilita-ai-control = "isso_facilita.desktop_control:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/isso_facilita"]

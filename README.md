@@ -96,6 +96,27 @@ Sanrio. A rotação fica salva no banco, evitando que descontos altos produzam v
 publicações do mesmo nicho em seguida. `MAX_AI_EVALUATIONS_PER_RUN` limita quantos itens
 o modelo avalia em cada ciclo para controlar o uso de memória e o tempo de processamento.
 
+#### Controle desktop da IA no Windows
+
+O controle desktop altera somente `AI_CURATION_ENABLED` no `.env`. Ao ativar ou
+desativar a IA, ele reinicia apenas o processo do bot para aplicar a configuração;
+Ollama e a ponte do WhatsApp permanecem ligados. Nenhuma outra configuração, prompt ou
+regra de curadoria é modificada.
+
+Para instalar os atalhos no Desktop e no Menu Iniciar:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\install_windows_ai_control.ps1
+```
+
+Abra **Isso Facilita - Controle da IA** e use **ATIVAR IA** ou **DESATIVAR IA**. O
+painel confirma tanto o estado efetivamente carregado pelo bot quanto se ele está
+online. Para remover apenas os atalhos:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\uninstall_windows_ai_control.ps1
+```
+
 ### Telegram e WhatsApp
 
 O Telegram é o destino automático principal. Adicione o bot como administrador do
