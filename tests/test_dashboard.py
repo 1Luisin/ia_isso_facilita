@@ -27,3 +27,4 @@ def test_scheduler_counts_processing_time_inside_interval() -> None:
     assert cycle_delay_seconds(5, 72.5) == 227.5
     assert cycle_delay_seconds(5, 301) == 0
     assert cycle_delay_seconds(0, 10) == 0
+    assert cycle_delay_seconds(0, 10, minimum_seconds=5) == 5

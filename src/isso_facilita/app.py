@@ -18,6 +18,8 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
+AI_PAUSED_RETRY_SECONDS = 5.0
+
 settings = get_settings()
 service = build_service(settings)
 repository = PublicationRepository(settings.database_path)
@@ -27,19 +29,26 @@ async def scheduler_loop(bot: PromotionService, interval_minutes: int) -> None:
     loop = asyncio.get_running_loop()
     while True:
         started_at = loop.time()
+        ai_paused = False
         try:
             result = await bot.run()
+            ai_paused = bool(result.ai_paused)
             logger.info("Ciclo concluído: %s", result.to_dict())
         except asyncio.CancelledError:
             raise
         except Exception:
             logger.exception("Falha inesperada no ciclo agendado")
         elapsed_seconds = loop.time() - started_at
-        await asyncio.sleep(cycle_delay_seconds(interval_minutes, elapsed_seconds))
+        minimum_seconds = AI_PAUSED_RETRY_SECONDS if ai_paused else 0.0
+        await asyncio.sleep(
+            cycle_delay_seconds(interval_minutes, elapsed_seconds, minimum_seconds)
+        )
 
 
-def cycle_delay_seconds(interval_minutes: int, elapsed_seconds: float) -> float:
-    return max(0.0, interval_minutes * 60 - elapsed_seconds)
+def cycle_delay_seconds(
+    interval_minutes: int, elapsed_seconds: float, minimum_seconds: float = 0.0
+) -> float:
+    return max(minimum_seconds, interval_minutes * 60 - elapsed_seconds)
 
 
 @asynccontextmanager
