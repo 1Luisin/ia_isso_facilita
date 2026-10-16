@@ -1,11 +1,14 @@
+import asyncio
 import base64
 import json
 import re
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Protocol
 
 import httpx
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from isso_facilita.models import Product
 
@@ -30,7 +33,9 @@ FORBIDDEN_COPY_TERMS = (
 )
 
 PRODUCT_OBJECT_ALIASES = {
-    "keycap": ("keycap", "key caps", "tecla", "teclas"),
+    "calendar": ("calendario", "calendar"),
+    "magnet": ("ima", "magnet"),
+    "keycap": ("keycap", "keycaps", "key caps", "tecla", "teclas"),
     "mousepad": (
         "mousepad",
         "mouse pad",
@@ -59,7 +64,15 @@ PRODUCT_OBJECT_ALIASES = {
         "phone ring",
     ),
     "controller": ("controle", "controller", "gamepad"),
-    "headphones": ("fone", "fones", "headset", "earphone", "headphone"),
+    "headphones": (
+        "fone",
+        "fones",
+        "fone de ouvido",
+        "fones de ouvido",
+        "headset",
+        "earphone",
+        "headphone",
+    ),
     "microphone": ("microfone", "microphone"),
     "monitor": ("monitor", "tela"),
 }
@@ -156,8 +169,11 @@ def _validate_copy(product: Product, result: CurationResult) -> CurationResult:
 
     normalized_title = product.title.casefold()
     normalized_copy = f"{headline} {description} {product_name}".casefold()
-    if any(term in normalized_copy for term in FORBIDDEN_COPY_TERMS):
-        raise CurationError("A IA usou uma expressão genérica ou proibida na copy")
+    for term in FORBIDDEN_COPY_TERMS:
+        if term in normalized_copy:
+            raise CurationError(
+                f"A IA usou uma expressão genérica ou proibida na copy: '{term}'"
+            )
     if not description.endswith((".", "!", "?")):
         raise CurationError("A IA retornou uma descrição incompleta")
     headline_key = re.sub(r"[^a-z0-9]+", " ", _without_accents(headline)).strip()
@@ -182,29 +198,15 @@ def _validate_copy(product: Product, result: CurationResult) -> CurationResult:
     ):
         raise CurationError("A IA usou 'setup' para um produto sem contexto de mesa ou PC")
 
-    required_objects = {
-        "calendario": "calendário",
-        "calendar": "calendário",
-        "ima": "ímã",
-        "magnet": "ímã",
-        "keycap": "keycap",
-        "teclado": "teclado",
-        "keyboard": "teclado",
-        "mousepad": "mousepad",
-        "deskmat": "deskmat",
-        "monitor": "monitor",
-        "microfone": "microfone",
-        "microphone": "microfone",
-    }
-    normalized_title_ascii = _without_accents(normalized_title)
-    normalized_copy_ascii = _without_accents(normalized_copy)
-    for source, expected in required_objects.items():
-        if re.search(rf"(?<!\w){re.escape(source)}(?!\w)", normalized_title_ascii):
-            if _without_accents(expected) not in normalized_copy_ascii:
-                raise CurationError(
-                    f"A IA não identificou o objeto principal do anúncio: {expected}"
-                )
-            break
+    title_objects = _title_product_object_keys(product.title)
+    copy_objects = _product_object_keys(f"{description} {product_name}")
+    if product_name and title_objects and not title_objects.intersection(copy_objects):
+        expected = sorted(title_objects)[0]
+        raise CurationError(
+            f"A IA não identificou o objeto principal do anúncio: {expected}"
+        )
+    if not _copy_has_title_detail(product, description):
+        raise CurationError("A descrição não incluiu um diferencial concreto do título")
 
     return CurationResult(
         relevant=True,
@@ -465,6 +467,24 @@ def _product_object_keys(text: str) -> set[str]:
     }
 
 
+def _title_product_object_keys(text: str) -> set[str]:
+    """Identifica primeiro o objeto vendido, sem confundir atributos secundários."""
+    normalized = _without_accents(text)
+    priority_patterns = (
+        ("keycap", r"(?<!\w)(?:key\s*caps?|keycaps?|teclas?\s+de\s+teclado)(?!\w)"),
+        (
+            "mousepad",
+            r"(?<!\w)(?:mouse\s*pad|mousepad|deskmat|tapete\s+(?:de|para)\s+(?:mouse|rato))(?!\w)",
+        ),
+        ("keyboard", r"(?<!\w)(?:teclado|keyboard)(?!\w)"),
+        ("mouse", r"(?<!\w)(?:mouse|gaming\s+mouse|mouse\s+gamer)(?!\w)"),
+    )
+    for key, pattern in priority_patterns:
+        if re.search(pattern, normalized):
+            return {key}
+    return _product_object_keys(text)
+
+
 def _significant_product_tokens(text: str) -> set[str]:
     tokens = re.findall(r"[a-z0-9]+", _without_accents(text))
     return {
@@ -474,8 +494,24 @@ def _significant_product_tokens(text: str) -> set[str]:
     }
 
 
+def _copy_has_title_detail(product: Product, description: str) -> bool:
+    ignored = PRODUCT_NAME_STOPWORDS | {
+        "gamer",
+        "gaming",
+        "item",
+        "jogo",
+        "produto",
+    }
+    for aliases in PRODUCT_OBJECT_ALIASES.values():
+        for alias in aliases:
+            ignored.update(re.findall(r"[a-z0-9]+", _without_accents(alias)))
+    title_tokens = _significant_product_tokens(product.title) - ignored
+    description_tokens = _significant_product_tokens(description) - ignored
+    return bool(title_tokens & description_tokens)
+
+
 def _description_names_product(product: Product, result: CurationResult) -> bool:
-    identified_objects = _product_object_keys(f"{product.title} {result.product_name}")
+    identified_objects = _title_product_object_keys(product.title)
     description_objects = _product_object_keys(result.description)
     if identified_objects:
         return bool(identified_objects & description_objects)
@@ -485,8 +521,135 @@ def _description_names_product(product: Product, result: CurationResult) -> bool
     )
 
 
+def _sanitize_ollama_copy(result: CurationResult) -> CurationResult:
+    replacements = {
+        "kawaii": "fofo",
+        "toque de fofura": "",
+        "mais personalidade": "",
+        "deixar seu cantinho": "decorar a mesa",
+        "para o seu cantinho": "para a mesa",
+        "design moderno": "",
+        "ideal para": "para",
+        "produto incrivel": "",
+        "produto incrível": "",
+        "une estilo e funcionalidade": "",
+        "em destaque": "",
+        "seleção da curadoria da isso facilita": "",
+    }
+
+    def clean(text: str) -> str:
+        for phrase, replacement in replacements.items():
+            text = re.sub(re.escape(phrase), replacement, text, flags=re.I)
+        text = re.sub(r"\s+", " ", text).strip(" ,-:;")
+        return re.sub(r"\s+([.!?])", r"\1", text)
+
+    return CurationResult(
+        relevant=result.relevant,
+        relevance_score=result.relevance_score,
+        headline=clean(result.headline),
+        description=clean(result.description),
+        reason=result.reason,
+        category=result.category,
+        product_name=clean(result.product_name),
+    )
+
+
+def _align_ollama_product_object(product: Product, result: CurationResult) -> CurationResult:
+    if not result.relevant:
+        return result
+    expected_objects = _title_product_object_keys(product.title)
+    if not expected_objects:
+        return result
+    labels = {
+        "calendar": "Calendário",
+        "controller": "Controle",
+        "figure": "Figure",
+        "headphones": "Fones de ouvido",
+        "keycap": "Keycaps",
+        "keyboard": "Teclado",
+        "magnet": "Ímã",
+        "microphone": "Microfone",
+        "monitor": "Suporte para monitor",
+        "mouse": "Mouse",
+        "mousepad": "Mousepad",
+        "phone_holder": "Suporte para celular",
+    }
+    expected = sorted(expected_objects)[0]
+    label = labels.get(expected, expected.title())
+    product_name = result.product_name
+    product_name_objects = _product_object_keys(product_name)
+    if not product_name_objects or (
+        expected == "keycap"
+        and expected not in product_name_objects
+        and product_name_objects.issubset({"figure", "keyboard"})
+    ):
+        product_name = f"{label} — {product_name}" if product_name else label
+    description = result.description
+    description_objects = _product_object_keys(description)
+    if not description_objects or (
+        expected == "keycap"
+        and expected not in description_objects
+        and description_objects.issubset({"figure", "keyboard"})
+    ):
+        description = f"{label}: {description[:1].lower()}{description[1:]}"
+    return CurationResult(
+        relevant=result.relevant,
+        relevance_score=result.relevance_score,
+        headline=result.headline,
+        description=description,
+        reason=result.reason,
+        category=result.category,
+        product_name=product_name,
+    )
+
+
+def _close_complete_description(result: CurationResult) -> CurationResult:
+    """Corrige apenas pontuacao final ausente em uma frase aparentemente completa."""
+    if not result.relevant or result.description.endswith((".", "!", "?")):
+        return result
+    trailing_words = re.findall(r"[a-z0-9]+", _without_accents(result.description))
+    incomplete_endings = {
+        "a",
+        "as",
+        "com",
+        "da",
+        "das",
+        "de",
+        "do",
+        "dos",
+        "e",
+        "em",
+        "na",
+        "nas",
+        "no",
+        "nos",
+        "o",
+        "os",
+        "para",
+        "por",
+        "que",
+        "um",
+        "uma",
+    }
+    if len(trailing_words) < 4 or trailing_words[-1] in incomplete_endings:
+        return result
+    return CurationResult(
+        relevant=result.relevant,
+        relevance_score=result.relevance_score,
+        headline=result.headline,
+        description=f"{result.description}.",
+        reason=result.reason,
+        category=result.category,
+        product_name=result.product_name,
+    )
+
+
 def _parse_ollama_result(product: Product, response_text: str) -> CurationResult:
-    result = _decode_ollama_result(response_text)
+    result = _close_complete_description(
+        _align_ollama_product_object(
+            product, _sanitize_ollama_copy(_decode_ollama_result(response_text))
+        )
+    )
     if result.relevant and not _description_names_product(product, result):
         raise CurationError("A descrição não nomeou claramente o produto identificado")
     return _validate_copy(product, result)
@@ -615,10 +778,11 @@ class OllamaCurator:
             },
             "description": {
                 "type": "string",
-                "maxLength": 170,
+                "maxLength": 150,
                 "description": (
-                    "Uma frase completa de até 170 caracteres que começa nomeando o product_type "
-                    "e explica a função, tema ou diferencial confirmado pelo título ou imagem."
+                    "Uma frase completa de até 140 caracteres, obrigatoriamente terminada por "
+                    "ponto, que começa nomeando o product_type e explica a função, tema ou "
+                    "diferencial confirmado pelo título ou imagem."
                 ),
             },
             "reason": {
@@ -668,6 +832,7 @@ class OllamaCurator:
     async def curate(self, product: Product) -> CurationResult:
         instructions = _curation_instructions(self.identity, self.feedback)
         product_context = _product_context(product)
+        detected_objects = sorted(_title_product_object_keys(product.title))
         schema_text = json.dumps(self.schema, ensure_ascii=False)
         user_message: dict[str, object] = {
             "role": "user",
@@ -675,6 +840,8 @@ class OllamaCurator:
                 f"Produto para avaliar: {product_context}\n"
                 "Identifique primeiro o objeto exato. product_type deve ser um nome natural "
                 "em português brasileiro e description deve começar nomeando esse mesmo item. "
+                f"O objeto principal detectado no título é: {detected_objects}. Não o troque "
+                "por personagens, formatos ou atributos secundários. "
                 "Use somente fatos do título ou claramente visíveis na imagem. Não enumere "
                 "palavras soltas do anúncio. Não escreva a palavra kawaii.\n"
                 f"Responda exatamente neste JSON Schema: {schema_text}"
@@ -702,23 +869,36 @@ class OllamaCurator:
                 image = await self._load_product_image(client, product.image_url)
                 if image:
                     user_message["images"] = [image]
-            content = await self._request(client, request)
-            try:
-                return _parse_ollama_result(product, content)
-            except CurationError as first_error:
-                request["messages"] = [
-                    *messages,
-                    {"role": "assistant", "content": content},
-                    {
-                        "role": "user",
-                        "content": (
-                            f"A resposta foi recusada: {first_error}. Corrija somente esse "
-                            "problema, confira novamente o título e responda no mesmo JSON."
-                        ),
-                    },
-                ]
-                repaired = await self._request(client, request)
-        return _parse_ollama_result(product, repaired)
+            last_error: CurationError | None = None
+            for attempt in range(3):
+                content = await self._request(client, request)
+                try:
+                    return _parse_ollama_result(product, content)
+                except CurationError as error:
+                    last_error = error
+                    if attempt == 2:
+                        break
+                    request["messages"] = [
+                        *messages,
+                        {"role": "assistant", "content": content},
+                        {
+                            "role": "user",
+                            "content": (
+                                f"A resposta foi recusada: {error}. O produto nao deve ser "
+                                "descartado por erro de redacao. Reescreva a copy corrigindo "
+                                "exatamente esse problema. A description deve comecar nomeando "
+                                "o product_type, ter no maximo 140 caracteres e terminar com "
+                                "ponto. Nao use nenhuma expressao generica proibida das "
+                                "instrucoes, especialmente: "
+                                f"{', '.join(FORBIDDEN_COPY_TERMS)}. O objeto principal e "
+                                f"{detected_objects}; product_type e description devem nomea-lo. "
+                                "Confira novamente o titulo e responda somente no "
+                                "mesmo JSON."
+                            ),
+                        },
+                    ]
+        assert last_error is not None
+        raise last_error
 
     async def _load_product_image(
         self, client: httpx.AsyncClient, image_url: str
@@ -735,17 +915,56 @@ class OllamaCurator:
             return None
         if not response.content or len(response.content) > 6 * 1024 * 1024:
             return None
-        return base64.b64encode(response.content).decode("ascii")
+        image_content = response.content
+        try:
+            with Image.open(BytesIO(image_content)) as source:
+                image = ImageOps.exif_transpose(source).convert("RGB")
+                image.thumbnail((768, 768), Image.Resampling.LANCZOS)
+                output = BytesIO()
+                image.save(output, format="JPEG", quality=82, optimize=True)
+                image_content = output.getvalue()
+        except (OSError, UnidentifiedImageError):
+            # Mantém compatibilidade com formatos que o Ollama reconheça diretamente.
+            pass
+        return base64.b64encode(image_content).decode("ascii")
 
     async def _request(
         self, client: httpx.AsyncClient, request: dict[str, object]
     ) -> str:
-        try:
-            response = await client.post(self.url, json=request)
-        except httpx.HTTPError as exc:
+        response: httpx.Response | None = None
+        connection_error: httpx.HTTPError | None = None
+        for attempt in range(2):
+            try:
+                response = await client.post(self.url, json=request)
+                connection_error = None
+            except httpx.HTTPError as exc:
+                connection_error = exc
+            should_recover = (
+                self.transport is None
+                and self.url.startswith(("http://127.0.0.1:", "http://localhost:"))
+                and attempt == 0
+                and (
+                    isinstance(connection_error, httpx.ConnectError)
+                    or (response is not None and response.status_code >= 500)
+                )
+            )
+            if not should_recover:
+                break
+            await asyncio.sleep(1)
+            try:
+                from isso_facilita.desktop_control import start_ollama
+
+                await asyncio.to_thread(start_ollama)
+            except Exception:
+                break
+        if connection_error is not None or response is None:
+            if isinstance(connection_error, httpx.ReadTimeout):
+                raise CurationError(
+                    "O Ollama ultrapassou o tempo limite ao analisar o produto."
+                ) from connection_error
             raise CurationError(
                 "Não foi possível conectar ao Ollama local. Confirme se ele está aberto."
-            ) from exc
+            ) from connection_error
         if response.is_error:
             detail = response.text.strip().replace("\n", " ")[:300]
             raise CurationError(

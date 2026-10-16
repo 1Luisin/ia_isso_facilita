@@ -252,8 +252,14 @@ async def test_ollama_repairs_unsupported_copy_once(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ollama_rejects_product_after_two_invalid_copy_attempts(tmp_path) -> None:
+async def test_ollama_rejects_copy_without_concrete_detail_after_three_attempts(
+    tmp_path,
+) -> None:
+    calls = 0
+
     async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
         content = {
             "relevant": True,
             "headline": "Produto incrível para sua rotina",
@@ -273,8 +279,42 @@ async def test_ollama_rejects_product_after_two_invalid_copy_attempts(tmp_path) 
         transport=httpx.MockTransport(handler),
     )
 
-    with pytest.raises(CurationError, match="genérica ou proibida"):
+    with pytest.raises(CurationError, match="diferencial concreto"):
         await curator.curate(product())
+
+    assert calls == 3
+
+
+@pytest.mark.asyncio
+async def test_ollama_adds_missing_final_punctuation_without_retry(tmp_path) -> None:
+    calls = 0
+
+    async def handler(_: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        content = {
+            "relevant": True,
+            "headline": "Som sem fio para acompanhar seu ritmo ✦",
+            "product_type": "Fones de ouvido",
+            "description": "Fones de ouvido Bluetooth com gancho ajustável",
+            "reason": "Características presentes no título.",
+            "category": "tech",
+        }
+        return httpx.Response(
+            200,
+            json={"message": {"role": "assistant", "content": json.dumps(content)}},
+        )
+
+    curator = OllamaCurator(
+        model="qwen3-vl:2b-instruct",
+        identity_path=identity_file(tmp_path),
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = await curator.curate(product())
+
+    assert calls == 1
+    assert result.description.endswith(".")
 
 
 @pytest.mark.asyncio
@@ -445,6 +485,35 @@ def test_ollama_still_rejects_description_of_a_different_object() -> None:
 
     with pytest.raises(CurationError, match="não nomeou claramente"):
         _parse_ollama_result(item, response)
+
+
+def test_ollama_prefixes_detected_keycap_when_model_omits_object_name() -> None:
+    item = product()
+    item = Product(
+        marketplace=item.marketplace,
+        product_id=item.product_id,
+        title="Neuvillette Keycaps Perfil Cherry PBT Genshin Impact",
+        product_url=item.product_url,
+        affiliate_url=item.affiliate_url,
+        image_url=item.image_url,
+        price=item.price,
+        original_price=item.original_price,
+    )
+    response = json.dumps(
+        {
+            "relevant": True,
+            "headline": "Neuvillette nos detalhes do teclado ✦",
+            "product_type": "Mini Figures artesanais de Genshin Impact",
+            "description": "Mini Figures em PBT inspiradas em Neuvillette.",
+            "reason": "Produto alinhado ao nicho.",
+            "category": "tech",
+        }
+    )
+
+    result = _parse_ollama_result(item, response)
+
+    assert result.product_name.startswith("Keycaps")
+    assert result.description.startswith("Keycaps:")
 
 
 def test_copy_rejects_kawaii_as_generic_published_word() -> None:
