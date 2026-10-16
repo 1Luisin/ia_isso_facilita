@@ -55,12 +55,22 @@ class AliExpressProvider(MarketplaceProvider):
 
     async def discover(self) -> list[Product]:
         batches = await asyncio.gather(
-            *(self._discover_keyword(keyword) for keyword in self.keywords)
+            *(self._discover_keyword(keyword) for keyword in self.keywords),
+            return_exceptions=True,
         )
         unique: dict[str, Product] = {}
+        errors: list[BaseException] = []
         for batch in batches:
+            if isinstance(batch, BaseException):
+                errors.append(batch)
+                logger.warning("Busca do AliExpress ignorada após falha: %s", batch)
+                continue
             for product in batch:
                 unique[product.product_id] = product
+        if not unique and errors and len(errors) == len(batches):
+            raise RuntimeError(
+                f"Todas as buscas do AliExpress falharam: {errors[0]}"
+            ) from errors[0]
         return list(unique.values())
 
     async def _discover_keyword(self, keyword: str) -> list[Product]:
@@ -129,7 +139,11 @@ class AliExpressProvider(MarketplaceProvider):
         if not response_key:
             raise RuntimeError("AliExpress retornou uma resposta sem dados reconhecíveis")
         envelope = payload.get(response_key, {}).get("resp_result", {})
-        if str(envelope.get("resp_code", "200")) != "200":
+        response_code = str(envelope.get("resp_code", "200"))
+        response_message = str(envelope.get("resp_msg", ""))
+        if response_code == "405" and "empty" in response_message.casefold():
+            return []
+        if response_code != "200":
             raise RuntimeError(f"AliExpress rejeitou a consulta: {envelope}")
         result = envelope.get("result", {})
         return result.get("products", {}).get("product", []) or []

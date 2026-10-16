@@ -49,6 +49,63 @@ async def test_reports_top_level_api_error(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
+async def test_empty_keyword_result_does_not_abort_other_searches(monkeypatch) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        params = parse_qs(request.content.decode())
+        keyword = params.get("keywords", [""])[0]
+        if keyword == "empty search":
+            return httpx.Response(
+                200,
+                json={
+                    "aliexpress_affiliate_hotproduct_query_response": {
+                        "resp_result": {
+                            "resp_code": 405,
+                            "resp_msg": "The result is empty",
+                        }
+                    }
+                },
+            )
+        return httpx.Response(
+            200,
+            json={
+                "aliexpress_affiliate_hotproduct_query_response": {
+                    "resp_result": {
+                        "resp_code": 200,
+                        "result": {
+                            "products": {
+                                "product": [
+                                    {
+                                        "product_id": "42",
+                                        "product_title": "Anime keycaps",
+                                        "promotion_link": "https://example.com/affiliate",
+                                        "target_sale_price": "50.00",
+                                        "target_original_price": "70.00",
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                }
+            },
+        )
+
+    custom_settings = settings()
+    custom_settings.aliexpress_keywords = "empty search,keycaps"
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kwargs: original_client(
+            transport=httpx.MockTransport(handler), **kwargs
+        ),
+    )
+
+    products = await AliExpressProvider(custom_settings).discover()
+
+    assert [item.product_id for item in products] == ["42"]
+
+
+@pytest.mark.asyncio
 async def test_parses_products_with_affiliate_links(monkeypatch) -> None:
     async def handler(_: httpx.Request) -> httpx.Response:
         return httpx.Response(

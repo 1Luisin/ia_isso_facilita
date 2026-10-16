@@ -53,7 +53,8 @@ class Settings(BaseSettings):
         "anime action figure 25cm,vocaloid action figure,"
         "hatsune miku figure,sanrio desk accessory,solo leveling figure,dandadan figure,"
         "my hero academia figure,demon slayer figure,wuthering waves figure,"
-        "genshin impact figure,hollow knight silksong figure,clair obscur figure"
+        "genshin impact figure,hollow knight silksong figure,clair obscur figure,"
+        "mechanical keyboard,keycaps,wireless mouse,mousepad,anime figure"
     )
 
     telegram_bot_token: str = ""
