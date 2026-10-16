@@ -382,6 +382,18 @@ def _interleave_prices(
     ]
 
 
+def _interleave_marketplaces(products: list[Product]) -> list[Product]:
+    grouped: dict[str, list[Product]] = {}
+    for product in products:
+        grouped.setdefault(product.marketplace, []).append(product)
+    return [
+        marketplace_products[index]
+        for index in range(max((len(items) for items in grouped.values()), default=0))
+        for marketplace_products in grouped.values()
+        if index < len(marketplace_products)
+    ]
+
+
 def order_for_editorial_rotation(
     products: list[Product],
     minimum_discount: float,
@@ -406,19 +418,16 @@ def order_for_editorial_rotation(
         if bucket == "anime_collectible":
             # Uma Action Figure específica e maior deve vencer brindes, standees e
             # miniaturas genéricas, mesmo que estes exibam um desconto percentual maior.
-            ordered.extend(
-                sorted(
-                    bucket_products,
-                    key=lambda item: _product_priority(item, character_priorities),
-                    reverse=True,
-                )
+            bucket_products = sorted(
+                bucket_products,
+                key=lambda item: _product_priority(item, character_priorities),
+                reverse=True,
             )
         else:
-            ordered.extend(
-                _interleave_prices(
-                    bucket_products, minimum_discount, character_priorities
-                )
+            bucket_products = _interleave_prices(
+                bucket_products, minimum_discount, character_priorities
             )
+        ordered.extend(_interleave_marketplaces(bucket_products))
     return ordered
 
 

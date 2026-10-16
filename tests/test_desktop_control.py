@@ -95,6 +95,7 @@ def test_stop_everything_targets_only_project_services(monkeypatch) -> None:
 
 def test_start_everything_uses_safe_service_order(monkeypatch, tmp_path: Path) -> None:
     actions: list[str] = []
+    wait_timeouts: list[float] = []
     monkeypatch.setattr(
         desktop_control,
         "start_ollama",
@@ -114,7 +115,7 @@ def test_start_everything_uses_safe_service_order(monkeypatch, tmp_path: Path) -
     monkeypatch.setattr(
         desktop_control,
         "_wait_for_url",
-        lambda url, _timeout: actions.append(url),
+        lambda url, timeout: (actions.append(url), wait_timeouts.append(timeout)),
     )
     monkeypatch.setattr(
         desktop_control,
@@ -125,4 +126,5 @@ def test_start_everything_uses_safe_service_order(monkeypatch, tmp_path: Path) -
     statuses = desktop_control.start_everything(tmp_path)
 
     assert actions == ["ollama", "whatsapp", "bot", desktop_control.BOT_URL]
+    assert wait_timeouts == [desktop_control.BOT_START_TIMEOUT_SECONDS]
     assert all(statuses.values())

@@ -29,6 +29,60 @@ FORBIDDEN_COPY_TERMS = (
     "seleção da curadoria da isso facilita",
 )
 
+PRODUCT_OBJECT_ALIASES = {
+    "keycap": ("keycap", "key caps", "tecla", "teclas"),
+    "mousepad": (
+        "mousepad",
+        "mouse pad",
+        "deskmat",
+        "tapete de mouse",
+        "tapete para mouse",
+        "tapete de rato",
+        "tapete para rato",
+        "tapete de mesa",
+    ),
+    "keyboard": ("teclado", "keyboard"),
+    "mouse": ("mouse", "gaming mouse", "mouse gamer"),
+    "figure": (
+        "action figure",
+        "figure",
+        "estatua",
+        "boneco",
+        "miniatura",
+    ),
+    "phone_holder": (
+        "suporte de celular",
+        "suporte para celular",
+        "suporte para smartphone",
+        "phone holder",
+        "anel de dedo",
+        "phone ring",
+    ),
+    "controller": ("controle", "controller", "gamepad"),
+    "headphones": ("fone", "fones", "headset", "earphone", "headphone"),
+    "microphone": ("microfone", "microphone"),
+    "monitor": ("monitor", "tela"),
+}
+
+PRODUCT_NAME_STOPWORDS = {
+    "a",
+    "as",
+    "com",
+    "da",
+    "das",
+    "de",
+    "do",
+    "dos",
+    "e",
+    "em",
+    "o",
+    "os",
+    "para",
+    "por",
+    "um",
+    "uma",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class CurationResult:
@@ -398,11 +452,42 @@ def _decode_ollama_result(response_text: str) -> CurationResult:
     return result
 
 
+def _contains_alias(text: str, alias: str) -> bool:
+    return bool(re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", text))
+
+
+def _product_object_keys(text: str) -> set[str]:
+    normalized = _without_accents(text)
+    return {
+        key
+        for key, aliases in PRODUCT_OBJECT_ALIASES.items()
+        if any(_contains_alias(normalized, alias) for alias in aliases)
+    }
+
+
+def _significant_product_tokens(text: str) -> set[str]:
+    tokens = re.findall(r"[a-z0-9]+", _without_accents(text))
+    return {
+        token[:-1] if len(token) > 4 and token.endswith("s") else token
+        for token in tokens
+        if len(token) >= 3 and token not in PRODUCT_NAME_STOPWORDS
+    }
+
+
+def _description_names_product(product: Product, result: CurationResult) -> bool:
+    identified_objects = _product_object_keys(f"{product.title} {result.product_name}")
+    description_objects = _product_object_keys(result.description)
+    if identified_objects:
+        return bool(identified_objects & description_objects)
+    return bool(
+        _significant_product_tokens(result.product_name)
+        & _significant_product_tokens(result.description)
+    )
+
+
 def _parse_ollama_result(product: Product, response_text: str) -> CurationResult:
     result = _decode_ollama_result(response_text)
-    if result.relevant and _without_accents(result.product_name) not in _without_accents(
-        result.description
-    ):
+    if result.relevant and not _description_names_product(product, result):
         raise CurationError("A descrição não nomeou claramente o produto identificado")
     return _validate_copy(product, result)
 

@@ -205,3 +205,34 @@ def test_current_character_franchise_gets_priority_inside_same_slot() -> None:
     )
 
     assert ordered[0].product_id == "genshin"
+
+
+def test_editorial_order_interleaves_marketplaces_inside_same_category() -> None:
+    aliexpress_first = product(
+        marketplace="aliexpress",
+        product_id="ali-1",
+        title="Genshin Impact keycaps PBT para teclado mecânico",
+    )
+    aliexpress_second = product(
+        marketplace="aliexpress",
+        product_id="ali-2",
+        title="Anime keycaps PBT para teclado mecânico",
+    )
+    shopee = product(
+        marketplace="shopee",
+        product_id="shopee-1",
+        title="Keycaps PBT para teclado mecânico",
+    )
+
+    ordered = order_for_editorial_rotation(
+        [aliexpress_first, aliexpress_second, shopee],
+        20,
+        rotation_index=0,
+        character_priorities={"genshin impact": 60},
+    )
+
+    assert [item.marketplace for item in ordered[:3]] == [
+        "aliexpress",
+        "shopee",
+        "aliexpress",
+    ]

@@ -9,6 +9,7 @@ from isso_facilita.curation import (
     CurationResult,
     OllamaCurator,
     OpenAICurator,
+    _parse_ollama_result,
     _validate_copy,
 )
 from isso_facilita.models import Product
@@ -377,6 +378,73 @@ def test_copy_normalizes_figure_de_acao_and_laptop() -> None:
     assert "Action Figure" in result.headline
     assert "laptop" not in result.description.casefold()
     assert "notebook" in result.description.casefold()
+
+
+@pytest.mark.parametrize(
+    ("title", "product_type", "description"),
+    [
+        (
+            "Keycap Genshin Impact Mini Figuras Artesanais de Hu Tao",
+            "Keycaps artesanais de Genshin Impact",
+            "Teclas personalizadas da Hu Tao para switches de eixo cruzado.",
+        ),
+        (
+            "Genshin Impact Mousepad XXL Anime Tapete de mesa",
+            "Mousepad XXL de Genshin Impact",
+            "Tapete de mesa de Genshin Impact com impressão HD.",
+        ),
+        (
+            "Genshin Impact Key Caps PBT Conjunto de 5 Chaves",
+            "Conjunto de keycaps de Genshin Impact",
+            "Teclas PBT de Genshin Impact para personalizar o teclado.",
+        ),
+    ],
+)
+def test_ollama_accepts_natural_names_for_same_product_object(
+    title: str, product_type: str, description: str
+) -> None:
+    item = product()
+    item = Product(
+        marketplace=item.marketplace,
+        product_id=item.product_id,
+        title=title,
+        product_url=item.product_url,
+        affiliate_url=item.affiliate_url,
+        image_url=item.image_url,
+        price=item.price,
+        original_price=item.original_price,
+    )
+    response = json.dumps(
+        {
+            "relevant": True,
+            "headline": "Um detalhe bonito para personalizar o teclado ✦",
+            "product_type": product_type,
+            "description": description,
+            "reason": "Produto alinhado ao nicho.",
+            "category": "tech",
+        }
+    )
+
+    result = _parse_ollama_result(item, response)
+
+    assert result.relevant
+
+
+def test_ollama_still_rejects_description_of_a_different_object() -> None:
+    item = product()
+    response = json.dumps(
+        {
+            "relevant": True,
+            "headline": "Um detalhe bonito para o setup ✦",
+            "product_type": "Fones de ouvido Bluetooth",
+            "description": "Suporte de celular com anel de dedo.",
+            "reason": "Produto alinhado ao nicho.",
+            "category": "tech",
+        }
+    )
+
+    with pytest.raises(CurationError, match="não nomeou claramente"):
+        _parse_ollama_result(item, response)
 
 
 def test_copy_rejects_kawaii_as_generic_published_word() -> None:

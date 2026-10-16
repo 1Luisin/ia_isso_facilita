@@ -23,6 +23,7 @@ BOT_URL = "http://127.0.0.1:8000/health"
 OLLAMA_URL = "http://127.0.0.1:11434/api/tags"
 WHATSAPP_URL = "http://127.0.0.1:3001/health"
 BOT_MODULE = "isso_facilita.app:app"
+BOT_START_TIMEOUT_SECONDS = 45
 ENV_KEY = "AI_CURATION_ENABLED"
 _ENV_LINE = re.compile(
     rf"^(?P<prefix>\s*(?:export\s+)?{ENV_KEY}\s*=\s*)"
@@ -282,7 +283,7 @@ def start_everything(project_root: Path = PROJECT_ROOT) -> dict[str, bool]:
     start_whatsapp(project_root)
     if get_bot_health() is None:
         start_bot(project_root)
-        _wait_for_url(BOT_URL, 20)
+        _wait_for_url(BOT_URL, BOT_START_TIMEOUT_SECONDS)
     return get_service_statuses()
 
 
@@ -320,7 +321,10 @@ def start_bot(project_root: Path = PROJECT_ROOT) -> None:
         )
 
 
-def restart_bot(project_root: Path = PROJECT_ROOT, timeout: float = 20) -> dict[str, object]:
+def restart_bot(
+    project_root: Path = PROJECT_ROOT,
+    timeout: float = BOT_START_TIMEOUT_SECONDS,
+) -> dict[str, object]:
     stop_bot(project_root)
     deadline = time.monotonic() + 8
     while get_bot_health() is not None and time.monotonic() < deadline:
