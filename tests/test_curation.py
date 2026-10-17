@@ -147,7 +147,8 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
         assert "Não repita mecanicamente o título" in serialized
         assert "A palavra 'cosplay' não descreve keycaps" in serialized
         assert "Nunca diga que uma característica está ausente" in serialized
-        assert "não repita nelas a mesma característica" in serialized
+        assert "descrição será o único texto editorial visível" in serialized
+        assert "deve ser autossuficiente" in serialized
         assert "não prova conforto" in serialized
         assert "personagens de anime, Sanrio" in serialized
         assert "não precisam ter função tecnológica" in serialized

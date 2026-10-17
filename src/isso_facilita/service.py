@@ -453,7 +453,7 @@ def compose_message(product: Product, curation: CurationResult | None = None) ->
         price_block = f"✦ Preço: {price}\n\n"
     editorial = ""
     if curation:
-        editorial = f"{curation.headline}\n{curation.description}\n\n"
+        editorial = f"{curation.description}\n\n"
     is_tech = (
         curation.category == "tech" if curation else is_technology_category(product)
     )

@@ -93,7 +93,7 @@ def test_curated_copy_preserves_official_product_fields() -> None:
 
     message = compose_message(item, curation)
 
-    assert curation.headline in message
+    assert curation.headline not in message
     assert curation.description in message
     assert item.title in message
     assert "R$ 500,00" in message
