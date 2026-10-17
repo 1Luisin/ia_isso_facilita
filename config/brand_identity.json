@@ -228,6 +228,8 @@
     "periféricos com especificações enganosas",
     "produtos cuja descrição contradiz suas características",
     "figuras ou personagens com conteúdo adulto, sexualizado, grotesco, gore ou violência explícita",
+    "kits de festa e conjuntos de decoração para festas",
+    "fantasias, roupas, perucas, máscaras e adereços de cosplay",
     "itens com promessas médicas não verificáveis",
     "anúncios com informações essenciais insuficientes",
     "produtos de qualidade comprovadamente ruim",
@@ -246,7 +248,6 @@
     "Chame colecionáveis tridimensionais de Figure ou Action Figure; não use figura como nome editorial do item.",
     "Identifique primeiro o objeto vendido. Ímã, calendário, suporte, chaveiro e acessório não devem ser chamados de Figure só por terem um personagem estampado.",
     "Evite frases genéricas como toque de fofura, mais personalidade e deixar seu cantinho.",
-    "A chamada deve ter no máximo 90 caracteres.",
     "A descrição deve ter no máximo 220 caracteres e uma ou duas frases.",
     "Evite urgência falsa, promessas absolutas e excesso de emojis.",
     "Não apresente produtos inspirados em personagens como oficiais ou licenciados sem confirmação."

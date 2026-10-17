@@ -35,10 +35,20 @@ FORBIDDEN_COPY_TERMS = (
 PRODUCT_OBJECT_ALIASES = {
     "calendar": ("calendario", "calendar"),
     "magnet": ("ima", "magnet"),
-    "keycap": ("keycap", "keycaps", "key caps", "tecla", "teclas"),
+    "keycap": (
+        "keycap",
+        "keycaps",
+        "key caps",
+        "tecla",
+        "teclas",
+        "tecla de espaco",
+        "barra de espaco",
+        "spacebar",
+    ),
     "mousepad": (
         "mousepad",
         "mouse pad",
+        "mouse pads",
         "deskmat",
         "tapete de mouse",
         "tapete para mouse",
@@ -51,8 +61,11 @@ PRODUCT_OBJECT_ALIASES = {
     "figure": (
         "action figure",
         "figure",
+        "figura",
+        "figuras",
         "estatua",
         "boneco",
+        "bonecos",
         "miniatura",
     ),
     "phone_holder": (
@@ -75,6 +88,34 @@ PRODUCT_OBJECT_ALIASES = {
     ),
     "microphone": ("microfone", "microphone"),
     "monitor": ("monitor", "tela"),
+    "plush": ("pelucia", "boneca de pelucia", "boneco de pelucia", "plush"),
+    "keychain": ("chaveiro", "keyring", "keychain"),
+    "console": ("console", "video game portatil", "videogame portatil"),
+    "adapter": ("adaptador", "receptor", "adapter", "receiver"),
+    "switch": ("switch", "switches", "interruptor", "interruptores"),
+    "switch_extractor": (
+        "extrator de switch",
+        "extrator de switches",
+        "extrator de tecla",
+        "extrator de teclas",
+        "switch puller",
+        "keycap puller",
+    ),
+    "mousepad_support": (
+        "suporte para mouse pad",
+        "suporte para mousepad",
+        "apoio para mouse pad",
+        "apoio para mousepad",
+    ),
+    "gamepad_mount": (
+        "suporte de clipe",
+        "clipe para controle",
+        "clipe para gamepad",
+        "gamepad clip",
+        "suporte de celular para controle",
+        "suporte para celular para controle",
+    ),
+    "gaming_kit": ("kit gamer", "kit gaming", "kit mobilador"),
 }
 
 PRODUCT_NAME_STOPWORDS = {
@@ -106,6 +147,8 @@ class CurationResult:
     reason: str
     category: str = "tech"
     product_name: str = ""
+    copy_repaired: bool = False
+    repair_reason: str = ""
 
 
 class ProductCurator(Protocol):
@@ -146,29 +189,24 @@ def _validate_copy(product: Product, result: CurationResult) -> CurationResult:
     if not result.relevant:
         return result
 
-    headline = _normalize_editorial_terms(
-        product, _normalize_collectible_terms(product, result.headline.strip())
-    )
     description = _normalize_editorial_terms(
         product, _normalize_collectible_terms(product, result.description.strip())
     )
     product_name = _normalize_editorial_terms(
         product, _normalize_collectible_terms(product, result.product_name.strip())
     )
-    if not headline or not description:
+    if not description:
         raise CurationError("A IA retornou uma descrição vazia")
-    if len(headline) > 90 or len(description) > 220 or len(product_name) > 100:
+    if len(description) > 220 or len(product_name) > 100:
         raise CurationError("A IA ultrapassou o limite de tamanho da copy")
 
-    official_numbers = set(re.findall(r"\d+(?:[.,]\d+)?", product.title))
-    generated_numbers = set(
-        re.findall(r"\d+(?:[.,]\d+)?", f"{headline} {description} {product_name}")
-    )
+    official_numbers = _number_claims(product.title)
+    generated_numbers = _number_claims(f"{description} {product_name}")
     if not generated_numbers.issubset(official_numbers):
         raise CurationError("A IA tentou incluir um número ausente no título oficial")
 
     normalized_title = product.title.casefold()
-    normalized_copy = f"{headline} {description} {product_name}".casefold()
+    normalized_copy = f"{description} {product_name}".casefold()
     for term in FORBIDDEN_COPY_TERMS:
         if term in normalized_copy:
             raise CurationError(
@@ -176,10 +214,6 @@ def _validate_copy(product: Product, result: CurationResult) -> CurationResult:
             )
     if not description.endswith((".", "!", "?")):
         raise CurationError("A IA retornou uma descrição incompleta")
-    headline_key = re.sub(r"[^a-z0-9]+", " ", _without_accents(headline)).strip()
-    product_key = re.sub(r"[^a-z0-9]+", " ", _without_accents(product_name)).strip()
-    if product_key and headline_key == product_key:
-        raise CurationError("A IA repetiu o nome do produto como chamada")
     if "confort" in normalized_copy and "confort" not in normalized_title:
         raise CurationError("A IA inventou uma afirmação de conforto ausente no título")
     setup_context = (
@@ -205,18 +239,43 @@ def _validate_copy(product: Product, result: CurationResult) -> CurationResult:
         raise CurationError(
             f"A IA não identificou o objeto principal do anúncio: {expected}"
         )
-    if not _copy_has_title_detail(product, description):
+    if not result.copy_repaired and not _copy_has_title_detail(product, description):
         raise CurationError("A descrição não incluiu um diferencial concreto do título")
 
     return CurationResult(
         relevant=True,
         relevance_score=result.relevance_score,
-        headline=headline,
+        headline="",
         description=description,
         reason=result.reason.strip(),
         category=result.category,
         product_name=product_name,
+        copy_repaired=result.copy_repaired,
+        repair_reason=result.repair_reason,
     )
+
+
+NUMBER_CLAIM_PATTERN = re.compile(
+    r"(?<!\w)(?:[a-z]{1,5}[-/]?)?\d+(?:[.,]\d+)*(?:[a-z+%]{0,6})?(?!\w)",
+    re.I,
+)
+
+
+def _number_claims(text: str) -> set[str]:
+    """Return canonical numeric claims, preserving model/unit context."""
+    normalized = _without_accents(text)
+    claims = NUMBER_CLAIM_PATTERN.findall(normalized)
+    return {re.sub(r"[^a-z0-9%+]", "", claim) for claim in claims}
+
+
+def _remove_unsupported_number_claims(text: str, official_title: str) -> str:
+    official = _number_claims(official_title)
+
+    def replace(match: re.Match[str]) -> str:
+        claim = re.sub(r"[^a-z0-9%+]", "", _without_accents(match.group(0)))
+        return match.group(0) if claim in official else ""
+
+    return re.sub(r"\s+", " ", NUMBER_CLAIM_PATTERN.sub(replace, text)).strip(" ,-:;")
 
 
 def _without_accents(text: str) -> str:
@@ -301,8 +360,8 @@ def _curation_instructions(
         "mencionar um personagem específico. Exemplo obrigatório: um standee de Project "
         "Sekai descrito como placa decorativa e figura de exibição deve ser aceito como "
         "relevant=true e category='general', desde que não haja conteúdo proibido. "
-        "A chamada é somente um dado interno e não será publicada. A descrição será o único "
-        "texto editorial visível, então deve ser autossuficiente: nomeie claramente o produto "
+        "A descrição será o único texto editorial visível, então deve ser autossuficiente: "
+        "nomeie claramente o produto "
         "e explique o que diferencia o item usando um ou dois fatos concretos do título. "
         "Use 'setup' somente para itens de mesa, computador ou "
         "organização do espaço; não use esse termo automaticamente para áudio, wearables ou "
@@ -311,8 +370,9 @@ def _curation_instructions(
         "Evite frases genéricas como 'para quem busca', 'ideal para', 'produto incrível', "
         "'une estilo e funcionalidade', 'para o dia a dia' e 'combina com seu setup' quando "
         "não vierem acompanhadas de uma característica concreta. Não chame keycaps ou teclas "
-        "avulsas de teclado completo. A palavra 'cosplay' não descreve keycaps: ignore-a nesse "
-        "contexto, salvo se o próprio objeto vendido for uma peça de vestuário. "
+        "avulsas de teclado completo. Rejeite kits de festa e produtos cujo objeto vendido "
+        "seja fantasia, roupa, peruca, acessório ou adereço de cosplay. A palavra 'cosplay' "
+        "em um título de keycaps ou colecionável não transforma esse objeto em fantasia. "
         "A palavra 'kawaii' pode ajudar na seleção interna, mas nunca deve aparecer na copy. "
         "Não use as fórmulas 'toque de fofura', 'mais personalidade', 'deixar seu cantinho' "
         "ou variações genéricas. Nomeie o item e diga objetivamente o que ele faz ou representa. "
@@ -333,9 +393,8 @@ def _curation_instructions(
         "(3) qual função ou diferencial concreto merece ser mencionado. A descrição deve soar como "
         "alguém que conhece o produto, não como uma enumeração de palavras do anúncio. "
         "Exemplo de título ruidoso: 'Teclas de teclado PBT para cosplay de anime, iluminação "
-        "frontal'. Copy ruim: 'Teclas PBT iluminadas para cosplay anime'. Copy coerente: "
-        "'Um visual de anime para renovar seu teclado ✿' e 'Keycaps em PBT com iluminação "
-        "frontal para personalizar o teclado com um detalhe inspirado em anime.'. "
+        "frontal'. Copy coerente: 'Keycaps em PBT com iluminação frontal para personalizar "
+        "o teclado com um detalhe inspirado em anime.'. "
         "Para 'Fones Bluetooth OWS com gancho ajustável e compartimento de carregamento', "
         "evite 'para seu setup' e evite repetir 'gancho ajustável'. Uma boa direção é: "
         "'Som sem fio para acompanhar seu ritmo ✦' e 'Modelo OWS esportivo com gancho "
@@ -395,7 +454,7 @@ def _product_context(product: Product) -> str:
     )
 
 
-def _parse_result(product: Product, response_text: str) -> CurationResult:
+def _decode_result(response_text: str) -> CurationResult:
     try:
         data = json.loads(response_text)
         if not isinstance(data, dict):
@@ -406,20 +465,24 @@ def _parse_result(product: Product, response_text: str) -> CurationResult:
             data["relevance_score"], int
         ):
             raise TypeError
-        text_fields = ("headline", "description", "reason", "category")
+        text_fields = ("description", "reason", "category")
         if any(not isinstance(data[field], str) for field in text_fields):
             raise TypeError
         result = CurationResult(
             relevant=data["relevant"],
             relevance_score=data["relevance_score"],
-            headline=data["headline"],
+            headline="",
             description=data["description"],
             reason=data["reason"],
             category=data["category"],
         )
     except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
         raise CurationError("A IA retornou dados inválidos") from exc
-    return _validate_copy(product, result)
+    return result
+
+
+def _parse_result(product: Product, response_text: str) -> CurationResult:
+    return _validate_copy(product, _decode_result(response_text))
 
 
 def _decode_ollama_result(response_text: str) -> CurationResult:
@@ -428,7 +491,6 @@ def _decode_ollama_result(response_text: str) -> CurationResult:
         if not isinstance(data, dict) or not isinstance(data["relevant"], bool):
             raise TypeError
         text_fields = (
-            "headline",
             "product_type",
             "description",
             "reason",
@@ -443,7 +505,7 @@ def _decode_ollama_result(response_text: str) -> CurationResult:
         result = CurationResult(
             relevant=data["relevant"],
             relevance_score=100 if data["relevant"] else 0,
-            headline=data["headline"],
+            headline="",
             description=description,
             reason=data["reason"],
             category=data["category"],
@@ -471,10 +533,45 @@ def _title_product_object_keys(text: str) -> set[str]:
     """Identifica primeiro o objeto vendido, sem confundir atributos secundários."""
     normalized = _without_accents(text)
     priority_patterns = (
-        ("keycap", r"(?<!\w)(?:key\s*caps?|keycaps?|teclas?\s+de\s+teclado)(?!\w)"),
+        (
+            "switch_extractor",
+            r"(?<!\w)(?:extrator\s+de\s+(?:switch(?:es)?|teclas?)|(?:switch|keycap)\s+puller)(?!\w)",
+        ),
+        (
+            "mousepad_support",
+            r"(?<!\w)(?:suporte|apoio)(?:\s+[a-z0-9-]+){0,4}\s+(?:para|de)\s+mouse\s*pad(?!\w)",
+        ),
+        (
+            "gamepad_mount",
+            r"(?<!\w)(?:suporte\s+de\s+clipe|clipe\s+para\s+(?:controle|gamepad))(?!\w)",
+        ),
+        ("plush", r"(?<!\w)(?:pelucia|bonec[oa]\s+de\s+pelucia|plush)(?!\w)"),
+        ("console", r"(?<!\w)(?:console|video\s*game\s+portatil)(?!\w)"),
+        ("adapter", r"(?<!\w)(?:adaptador|receptor|adapter|receiver)(?!\w)"),
+        (
+            "gaming_kit",
+            r"(?<!\w)(?:kit\s+(?:gamer|gaming|mobilador)|kit\b.{0,40}\bteclado\b.{0,30}\bmouse)(?!\w)",
+        ),
+        (
+            "figure",
+            r"(?<!\w)bonecos?\s+de\s+acrilico(?!\w)",
+        ),
+        (
+            "keychain",
+            r"(?<!\w)(?:chaveiro|keyring|keychain|keycap\s+keyring)(?!\w)",
+        ),
+        (
+            "keycap",
+            r"(?<!\w)(?:key\s*caps?|keycaps?|teclas?\s+de\s+teclado|teclas?\s+de\b.{0,80}\bpara\s+teclado|tecla\s+de\s+espaco|spacebar)(?!\w)",
+        ),
+        (
+            "figure",
+            r"(?<!\w)(?:figuras?|action\s+figure|estatuas?|miniaturas?)(?!\w)",
+        ),
+        ("switch", r"(?<!\w)(?:switch(?:es)?|interruptores?)(?!\w)"),
         (
             "mousepad",
-            r"(?<!\w)(?:mouse\s*pad|mousepad|deskmat|tapete\s+(?:de|para)\s+(?:mouse|rato))(?!\w)",
+            r"(?<!\w)(?:mouse\s*pads?|mousepad|deskmat|tapete\s+(?:de|para)\s+(?:mouse|rato))(?!\w)",
         ),
         ("keyboard", r"(?<!\w)(?:teclado|keyboard)(?!\w)"),
         ("mouse", r"(?<!\w)(?:mouse|gaming\s+mouse|mouse\s+gamer)(?!\w)"),
@@ -521,7 +618,7 @@ def _description_names_product(product: Product, result: CurationResult) -> bool
     )
 
 
-def _sanitize_ollama_copy(result: CurationResult) -> CurationResult:
+def _sanitize_ollama_copy(product: Product, result: CurationResult) -> CurationResult:
     replacements = {
         "kawaii": "fofo",
         "toque de fofura": "",
@@ -543,14 +640,20 @@ def _sanitize_ollama_copy(result: CurationResult) -> CurationResult:
         text = re.sub(r"\s+", " ", text).strip(" ,-:;")
         return re.sub(r"\s+([.!?])", r"\1", text)
 
+    description = result.description
+    if "confort" not in _without_accents(product.title):
+        description = re.sub(r"\bconfort\w*\b", "", description, flags=re.I)
+
     return CurationResult(
         relevant=result.relevant,
         relevance_score=result.relevance_score,
-        headline=clean(result.headline),
-        description=clean(result.description),
+        headline="",
+        description=clean(description),
         reason=result.reason,
         category=result.category,
         product_name=clean(result.product_name),
+        copy_repaired=result.copy_repaired,
+        repair_reason=result.repair_reason,
     )
 
 
@@ -573,6 +676,15 @@ def _align_ollama_product_object(product: Product, result: CurationResult) -> Cu
         "mouse": "Mouse",
         "mousepad": "Mousepad",
         "phone_holder": "Suporte para celular",
+        "plush": "Pelúcia",
+        "keychain": "Chaveiro",
+        "console": "Console portátil",
+        "adapter": "Adaptador",
+        "switch": "Switches",
+        "switch_extractor": "Extrator de switches",
+        "mousepad_support": "Suporte para mousepad",
+        "gamepad_mount": "Suporte de celular para controle",
+        "gaming_kit": "Kit gamer",
     }
     expected = sorted(expected_objects)[0]
     label = labels.get(expected, expected.title())
@@ -595,11 +707,13 @@ def _align_ollama_product_object(product: Product, result: CurationResult) -> Cu
     return CurationResult(
         relevant=result.relevant,
         relevance_score=result.relevance_score,
-        headline=result.headline,
+        headline="",
         description=description,
         reason=result.reason,
         category=result.category,
         product_name=product_name,
+        copy_repaired=result.copy_repaired,
+        repair_reason=result.repair_reason,
     )
 
 
@@ -636,23 +750,136 @@ def _close_complete_description(result: CurationResult) -> CurationResult:
     return CurationResult(
         relevant=result.relevant,
         relevance_score=result.relevance_score,
-        headline=result.headline,
+        headline="",
         description=f"{result.description}.",
         reason=result.reason,
         category=result.category,
         product_name=result.product_name,
+        copy_repaired=result.copy_repaired,
+        repair_reason=result.repair_reason,
     )
 
 
 def _parse_ollama_result(product: Product, response_text: str) -> CurationResult:
     result = _close_complete_description(
         _align_ollama_product_object(
-            product, _sanitize_ollama_copy(_decode_ollama_result(response_text))
+            product, _sanitize_ollama_copy(product, _decode_ollama_result(response_text))
         )
     )
     if result.relevant and not _description_names_product(product, result):
         raise CurationError("A descrição não nomeou claramente o produto identificado")
     return _validate_copy(product, result)
+
+
+FALLBACK_DETAILS: tuple[tuple[str, str], ...] = (
+    ("bluetooth", "conexão Bluetooth"),
+    ("sem fio", "conexão sem fio"),
+    ("wireless", "conexão sem fio"),
+    ("rgb", "iluminação RGB"),
+    ("antiderrapante", "base antiderrapante"),
+    ("anti-deslizamento", "base antiderrapante"),
+    ("borracha", "base de borracha"),
+    ("pbt", "material PBT"),
+    ("sublimacao", "impressão por sublimação"),
+    ("dye sub", "impressão dye-sub"),
+    ("hot-swap", "sistema hot-swap"),
+    ("hot swap", "sistema hot-swap"),
+    ("switch mx", "compatibilidade com switches MX"),
+    ("mecanico", "uso em teclado mecânico"),
+    ("anime", "tema de anime"),
+)
+
+FALLBACK_THEMES: tuple[tuple[str, str], ...] = (
+    ("genshin impact", "Genshin Impact"),
+    ("wuthering waves", "Wuthering Waves"),
+    ("pokemon", "Pokémon"),
+    ("solo leveling", "Solo Leveling"),
+    ("demon slayer", "Demon Slayer"),
+    ("kimetsu no yaiba", "Demon Slayer"),
+    ("hatsune miku", "Hatsune Miku"),
+    ("my hero academia", "My Hero Academia"),
+    ("hololive", "Hololive"),
+    ("one piece", "One Piece"),
+    ("chainsaw man", "Chainsaw Man"),
+    ("hollow knight", "Hollow Knight"),
+    ("silksong", "Hollow Knight: Silksong"),
+)
+
+FALLBACK_FUNCTIONS = {
+    "adapter": "para conectar dispositivos compatíveis",
+    "console": "para jogos portáteis",
+    "controller": "para jogar no computador ou console compatível",
+    "figure": "para decoração e coleção",
+    "gamepad_mount": "para prender o celular ao controle",
+    "gaming_kit": "com acessórios para computador",
+    "headphones": "para reprodução de áudio",
+    "keycap": "para personalizar o teclado",
+    "keychain": "para decorar chaves, bolsas ou acessórios",
+    "keyboard": "para uso no computador",
+    "mouse": "para uso no computador",
+    "mousepad": "para usar com mouse e teclado",
+    "mousepad_support": "para apoiar o braço durante o uso do mouse",
+    "plush": "para decoração ou coleção",
+    "switch": "para personalizar teclado mecânico",
+    "switch_extractor": "para remover switches e keycaps do teclado",
+}
+
+
+def _fallback_curation(
+    product: Product, result: CurationResult, error_message: str
+) -> CurationResult:
+    """Build safe publishable copy after the model approved the product."""
+    if not result.relevant:
+        return result
+    aligned = _align_ollama_product_object(product, _sanitize_ollama_copy(product, result))
+    objects = _title_product_object_keys(product.title)
+    primary = sorted(objects)[0] if objects else ""
+    product_name = _remove_unsupported_number_claims(
+        aligned.product_name or "Produto", product.title
+    )
+    normalized_title = _without_accents(product.title)
+    theme = next(
+        (label for token, label in FALLBACK_THEMES if token in normalized_title), ""
+    )
+    if theme and theme.casefold() not in product_name.casefold():
+        product_name = f"{product_name} de {theme}"
+
+    details: list[str] = []
+    for token, label in FALLBACK_DETAILS:
+        if token not in normalized_title:
+            continue
+        if label == "conexão sem fio" and "conexão Bluetooth" in details:
+            continue
+        if label == "uso em teclado mecânico":
+            label = {
+                "keyboard": "estrutura mecânica",
+                "keycap": "compatibilidade com teclados mecânicos",
+                "switch": "uso em teclados mecânicos",
+                "switch_extractor": "uso em teclados mecânicos",
+            }.get(primary, label)
+        if label not in details:
+            details.append(label)
+        if len(details) == 2:
+            break
+    if details:
+        detail_text = details[0] if len(details) == 1 else f"{details[0]} e {details[1]}"
+        description = f"{product_name} com {detail_text}."
+    else:
+        function = FALLBACK_FUNCTIONS.get(primary, "com características descritas no anúncio")
+        description = f"{product_name} {function}."
+
+    repaired = CurationResult(
+        relevant=True,
+        relevance_score=result.relevance_score,
+        headline="",
+        description=description,
+        reason=result.reason,
+        category=result.category,
+        product_name=product_name,
+        copy_repaired=True,
+        repair_reason=error_message,
+    )
+    return _validate_copy(product, repaired)
 
 
 class OpenAICurator:
@@ -668,10 +895,6 @@ class OpenAICurator:
                 "minimum": 0,
                 "maximum": 100,
                 "description": "Aderência do produto à página Isso Facilita.",
-            },
-            "headline": {
-                "type": "string",
-                "description": "Chamada curta em português brasileiro, sem preço ou desconto.",
             },
             "description": {
                 "type": "string",
@@ -690,7 +913,6 @@ class OpenAICurator:
         "required": [
             "relevant",
             "relevance_score",
-            "headline",
             "description",
             "reason",
             "category",
@@ -752,7 +974,14 @@ class OpenAICurator:
         if response.is_error:
             raise CurationError(f"A API de IA rejeitou a solicitação (HTTP {response.status_code})")
 
-        return _parse_result(product, _output_text(response.json()))
+        response_text = _output_text(response.json())
+        try:
+            return _parse_result(product, response_text)
+        except CurationError as error:
+            decoded = _decode_result(response_text)
+            if decoded.relevant:
+                return _fallback_curation(product, decoded, str(error))
+            raise
 
 
 class OllamaCurator:
@@ -762,11 +991,6 @@ class OllamaCurator:
             "relevant": {
                 "type": "boolean",
                 "description": "Se o título pertence ao universo editorial da página.",
-            },
-            "headline": {
-                "type": "string",
-                "maxLength": 90,
-                "description": "Chamada curta sem preço ou desconto; vazia se irrelevante.",
             },
             "product_type": {
                 "type": "string",
@@ -798,7 +1022,6 @@ class OllamaCurator:
         },
         "required": [
             "relevant",
-            "headline",
             "product_type",
             "description",
             "reason",
@@ -870,12 +1093,17 @@ class OllamaCurator:
                 if image:
                     user_message["images"] = [image]
             last_error: CurationError | None = None
+            last_decoded: CurationResult | None = None
             for attempt in range(3):
                 content = await self._request(client, request)
                 try:
                     return _parse_ollama_result(product, content)
                 except CurationError as error:
                     last_error = error
+                    try:
+                        last_decoded = _decode_ollama_result(content)
+                    except CurationError:
+                        pass
                     if attempt == 2:
                         break
                     request["messages"] = [
@@ -898,6 +1126,8 @@ class OllamaCurator:
                         },
                     ]
         assert last_error is not None
+        if last_decoded is not None and last_decoded.relevant:
+            return _fallback_curation(product, last_decoded, str(last_error))
         raise last_error
 
     async def _load_product_image(

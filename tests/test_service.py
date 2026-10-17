@@ -49,6 +49,10 @@ def test_hard_rejects_incompatible_categories_and_expensive_offers() -> None:
         "Microfone UHF duplo para karaokê",
         "Microfone sem fio UHF de dois canais",
         "Meias de cosplay de anime",
+        "Fantasia cosplay completa de personagem de anime",
+        "Peruca cosplay de personagem",
+        "Kit de festa infantil com 50 peças",
+        "Anime birthday party supplies",
         "Kit de pintura a óleo para tela",
     )
 
@@ -59,6 +63,12 @@ def test_hard_rejects_incompatible_categories_and_expensive_offers() -> None:
     )
     assert not is_hard_rejected(
         product(title="Controle gamer sem fio 8BitDo", price=Decimal("251.19"))
+    )
+    assert not is_hard_rejected(
+        product(title="Keycaps de Genshin Impact para teclado, acessório de cosplay")
+    )
+    assert not is_hard_rejected(
+        product(title="Figure de Hollow Knight em resina, cosplay prop decorativo")
     )
 
 
@@ -79,6 +89,28 @@ def test_regular_price_message_does_not_invent_discount() -> None:
     assert "⊹ De:" not in message
     assert "✦ Por:" not in message
     assert "Desconto:" not in message
+
+
+def test_marketplace_rotation_can_prioritize_shopee() -> None:
+    aliexpress = product(
+        marketplace="aliexpress",
+        product_id="ali",
+        title="Mouse gamer sem fio",
+    )
+    shopee = product(
+        marketplace="shopee",
+        product_id="shopee",
+        title="Mouse gamer sem fio",
+    )
+
+    ordered = order_for_editorial_rotation(
+        [aliexpress, shopee],
+        minimum_discount=20,
+        rotation_index=0,
+        preferred_marketplace="shopee",
+    )
+
+    assert ordered[0].marketplace == "shopee"
 
 
 def test_curated_copy_preserves_official_product_fields() -> None:

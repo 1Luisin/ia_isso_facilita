@@ -1,6 +1,7 @@
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from isso_facilita.models import Publication
@@ -55,6 +56,16 @@ class PublicationRepository:
                 CREATE TABLE IF NOT EXISTS app_state (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ai_failures (
+                    fingerprint TEXT PRIMARY KEY,
+                    failure_count INTEGER NOT NULL,
+                    last_reason TEXT NOT NULL,
+                    cooldown_until TEXT
                 )
                 """
             )
@@ -128,4 +139,68 @@ class PublicationRepository:
                 ON CONFLICT(key) DO UPDATE SET value = excluded.value
                 """,
                 (key, value),
+            )
+
+    def ai_failure_in_cooldown(
+        self, fingerprint: str, *, now: datetime | None = None
+    ) -> bool:
+        current = now or datetime.now(UTC)
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT cooldown_until FROM ai_failures WHERE fingerprint = ?",
+                (fingerprint,),
+            ).fetchone()
+        if not row or not row["cooldown_until"]:
+            return False
+        try:
+            return datetime.fromisoformat(str(row["cooldown_until"])) > current
+        except ValueError:
+            return False
+
+    def record_ai_failure(
+        self,
+        fingerprint: str,
+        reason: str,
+        *,
+        max_attempts: int = 3,
+        cooldown_hours: int = 6,
+        now: datetime | None = None,
+    ) -> int:
+        current = now or datetime.now(UTC)
+        with self._connection() as connection:
+            row = connection.execute(
+                "SELECT failure_count, cooldown_until FROM ai_failures WHERE fingerprint = ?",
+                (fingerprint,),
+            ).fetchone()
+            previous_count = int(row["failure_count"]) if row else 0
+            if row and row["cooldown_until"]:
+                try:
+                    if datetime.fromisoformat(str(row["cooldown_until"])) <= current:
+                        previous_count = 0
+                except ValueError:
+                    previous_count = 0
+            failure_count = previous_count + 1
+            cooldown_until = (
+                (current + timedelta(hours=cooldown_hours)).isoformat()
+                if failure_count >= max_attempts
+                else None
+            )
+            connection.execute(
+                """
+                INSERT INTO ai_failures
+                    (fingerprint, failure_count, last_reason, cooldown_until)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(fingerprint) DO UPDATE SET
+                    failure_count = excluded.failure_count,
+                    last_reason = excluded.last_reason,
+                    cooldown_until = excluded.cooldown_until
+                """,
+                (fingerprint, failure_count, reason, cooldown_until),
+            )
+        return failure_count
+
+    def clear_ai_failure(self, fingerprint: str) -> None:
+        with self._connection() as connection:
+            connection.execute(
+                "DELETE FROM ai_failures WHERE fingerprint = ?", (fingerprint,)
             )

@@ -26,7 +26,7 @@ def record_ai_decision(
 ) -> None:
     """Persist an AI decision without ever interrupting the publication pipeline."""
     if accepted is True:
-        status = "accepted"
+        status = "repaired" if curation and curation.copy_repaired else "accepted"
     elif accepted is False:
         status = "rejected"
     else:
@@ -43,6 +43,8 @@ def record_ai_decision(
         "threshold": threshold,
         "ai_relevant": curation.relevant if curation else None,
         "reason": curation.reason if curation else error_message,
+        "description": curation.description if curation else "",
+        "repair_reason": curation.repair_reason if curation else "",
     }
     try:
         log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -56,6 +58,8 @@ def record_ai_decision(
 def read_ai_decisions(
     log_path: Path = AI_AUDIT_PATH,
     limit: int = 300,
+    *,
+    unique_products: bool = False,
 ) -> list[dict[str, object]]:
     """Return the newest valid audit entries first, ignoring incomplete lines."""
     if not log_path.exists() or limit <= 0:
@@ -71,6 +75,7 @@ def read_ai_decisions(
                     continue
                 if isinstance(entry, dict) and entry.get("status") in {
                     "accepted",
+                    "repaired",
                     "rejected",
                     "error",
                 }:
@@ -78,4 +83,15 @@ def read_ai_decisions(
     except OSError:
         logger.exception("Não foi possível ler o histórico local de decisões da IA")
         return []
-    return list(reversed(recent))
+    entries = list(reversed(recent))
+    if not unique_products:
+        return entries
+    unique: list[dict[str, object]] = []
+    seen: set[tuple[str, str]] = set()
+    for entry in entries:
+        key = (str(entry.get("marketplace", "")), str(entry.get("product_id", "")))
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(entry)
+    return unique

@@ -57,3 +57,25 @@ def test_ai_audit_ignores_incomplete_lines_and_respects_limit(tmp_path: Path) ->
     assert len(entries) == 1
     assert entries[0]["product_id"] == "two"
     assert entries[0]["status"] == "error"
+
+
+def test_ai_audit_marks_repaired_copy_and_can_deduplicate_products(tmp_path: Path) -> None:
+    log_path = tmp_path / "ai-curation.jsonl"
+    item = make_product("same")
+    record_ai_decision(item, None, None, 75, "primeira falha", log_path=log_path)
+    repaired = CurationResult(
+        relevant=True,
+        relevance_score=100,
+        headline="",
+        description="Teclado mecânico com conexão USB.",
+        reason="Produto alinhado.",
+        copy_repaired=True,
+        repair_reason="A descrição original estava incompleta",
+    )
+    record_ai_decision(item, repaired, True, 75, log_path=log_path)
+
+    entries = read_ai_decisions(log_path, unique_products=True)
+
+    assert len(entries) == 1
+    assert entries[0]["status"] == "repaired"
+    assert entries[0]["repair_reason"] == "A descrição original estava incompleta"

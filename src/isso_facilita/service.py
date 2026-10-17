@@ -227,6 +227,41 @@ HARD_REJECT_KEYWORDS = {
     "extension board",
     "extension cable",
     "power strip",
+    "kit de festa",
+    "kit festa",
+    "festa infantil kit",
+    "party kit",
+    "party supplies",
+    "party decoration kit",
+}
+
+COSPLAY_OBJECT_KEYWORDS = {
+    "fantasia cosplay",
+    "cosplay fantasia",
+    "roupa cosplay",
+    "cosplay roupa",
+    "traje cosplay",
+    "cosplay traje",
+    "vestido cosplay",
+    "cosplay vestido",
+    "peruca cosplay",
+    "cosplay peruca",
+    "cosplay wig",
+    "cosplay costume",
+    "cosplay outfit",
+    "cosplay mask",
+    "mascara cosplay",
+    "cosplay mascara",
+    "luvas cosplay",
+    "cosplay luvas",
+    "cosplay gloves",
+    "cosplay prop weapon",
+    "espada cosplay",
+    "cosplay espada",
+    "arma cosplay",
+    "cosplay arma",
+    "cosplay sword",
+    "cosplay weapon",
 }
 
 PREFERRED_PRODUCT_KEYWORDS = {
@@ -283,7 +318,7 @@ def is_hard_rejected(product: Product, max_product_price_brl: float = 500) -> bo
         str(max_product_price_brl)
     ):
         return True
-    return _contains_keyword(title, HARD_REJECT_KEYWORDS)
+    return _contains_keyword(title, HARD_REJECT_KEYWORDS | COSPLAY_OBJECT_KEYWORDS)
 
 
 def is_technology_category(product: Product) -> bool:
@@ -382,15 +417,21 @@ def _interleave_prices(
     ]
 
 
-def _interleave_marketplaces(products: list[Product]) -> list[Product]:
+def _interleave_marketplaces(
+    products: list[Product], preferred_marketplace: str | None = None
+) -> list[Product]:
     grouped: dict[str, list[Product]] = {}
     for product in products:
         grouped.setdefault(product.marketplace, []).append(product)
+    marketplace_order = list(grouped)
+    if preferred_marketplace in grouped:
+        marketplace_order.remove(preferred_marketplace)
+        marketplace_order.insert(0, preferred_marketplace)
     return [
-        marketplace_products[index]
+        grouped[marketplace][index]
         for index in range(max((len(items) for items in grouped.values()), default=0))
-        for marketplace_products in grouped.values()
-        if index < len(marketplace_products)
+        for marketplace in marketplace_order
+        if index < len(grouped[marketplace])
     ]
 
 
@@ -399,6 +440,7 @@ def order_for_editorial_rotation(
     minimum_discount: float,
     rotation_index: int,
     character_priorities: dict[str, float] | None = None,
+    preferred_marketplace: str | None = None,
 ) -> list[Product]:
     grouped: dict[str, list[Product]] = {}
     for product in products:
@@ -427,7 +469,9 @@ def order_for_editorial_rotation(
             bucket_products = _interleave_prices(
                 bucket_products, minimum_discount, character_priorities
             )
-        ordered.extend(_interleave_marketplaces(bucket_products))
+        ordered.extend(
+            _interleave_marketplaces(bucket_products, preferred_marketplace)
+        )
     return ordered
 
 
@@ -480,6 +524,7 @@ class RunResult:
     ai_failures: int = 0
     ai_evaluated: int = 0
     ai_paused: int = 0
+    ai_deferred: int = 0
 
     def to_dict(self) -> dict[str, int]:
         return asdict(self)
@@ -583,11 +628,15 @@ class PromotionService:
                 rotation_index = int(self.repository.get_state("editorial_rotation", "0"))
             except ValueError:
                 rotation_index = 0
+            preferred_marketplace = self.repository.get_state(
+                "marketplace_rotation", "shopee"
+            )
             eligible = order_for_editorial_rotation(
                 eligible,
                 self.min_discount_percent,
                 rotation_index,
                 self.character_priorities,
+                preferred_marketplace,
             )
             result.eligible = len(eligible)
             candidate_offset = 0
@@ -620,6 +669,14 @@ class PromotionService:
                     continue
                 curation = None
                 if self.curator:
+                    if self.record_publications and self.repository.ai_failure_in_cooldown(
+                        product.fingerprint
+                    ):
+                        result.ai_deferred += 1
+                        next_candidate_offset = (
+                            candidate_offset + position + 1
+                        ) % len(eligible)
+                        continue
                     if result.ai_evaluated >= self.max_ai_evaluations_per_run:
                         break
                     result.ai_evaluated += 1
@@ -631,6 +688,10 @@ class PromotionService:
                     except Exception as error:
                         result.failures += 1
                         result.ai_failures += 1
+                        if self.record_publications:
+                            self.repository.record_ai_failure(
+                                product.fingerprint, str(error)
+                            )
                         self._record_ai_decision(product, None, None, str(error))
                         logger.exception(
                             "Falha na curadoria por IA de %s:%s",
@@ -638,6 +699,8 @@ class PromotionService:
                             product.product_id,
                         )
                         continue
+                    if self.record_publications:
+                        self.repository.clear_ai_failure(product.fingerprint)
                     accepted = (
                         curation.relevant
                         and curation.relevance_score >= self.ai_relevance_threshold
@@ -684,11 +747,17 @@ class PromotionService:
                             "editorial_rotation",
                             str((rotation_index + 1) % len(EDITORIAL_ROTATION)),
                         )
+                        next_marketplace = (
+                            "aliexpress"
+                            if product.marketplace == "shopee"
+                            else "shopee"
+                        )
+                        self.repository.set_state(
+                            "marketplace_rotation", next_marketplace
+                        )
                     rotation_index = (rotation_index + 1) % len(EDITORIAL_ROTATION)
             if self.curator and self.record_publications:
-                if result.published:
-                    self.repository.set_state("ai_candidate_offset", "0")
-                elif result.ai_evaluated:
+                if result.ai_evaluated or result.ai_deferred:
                     self.repository.set_state(
                         "ai_candidate_offset", str(next_candidate_offset)
                     )

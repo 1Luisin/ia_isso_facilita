@@ -10,6 +10,7 @@ from isso_facilita.curation import (
     OllamaCurator,
     OpenAICurator,
     _parse_ollama_result,
+    _title_product_object_keys,
     _validate_copy,
 )
 from isso_facilita.models import Product
@@ -44,6 +45,7 @@ async def test_curator_returns_structured_copy_without_sending_commercial_fields
     async def handler(request: httpx.Request) -> httpx.Response:
         payload = json.loads(request.content)
         assert payload["model"] == "gpt-6-luna"
+        assert "headline" not in payload["text"]["format"]["schema"]["properties"]
         assert "132.59" not in payload["input"]
         assert "_short" not in payload["input"]
         return httpx.Response(
@@ -85,7 +87,7 @@ async def test_curator_returns_structured_copy_without_sending_commercial_fields
 
     assert result.relevant
     assert result.relevance_score == 94
-    assert result.headline == "Seu som, do seu jeito ✦"
+    assert result.headline == ""
 
 
 @pytest.mark.asyncio
@@ -104,8 +106,7 @@ async def test_curator_rejects_invented_numbers(tmp_path) -> None:
                                     {
                                         "relevant": True,
                                         "relevance_score": 90,
-                                        "headline": "Bateria para 48 horas",
-                                        "description": "Tecnologia para o dia a dia.",
+                                    "description": "Fones de ouvido com bateria para 48 horas.",
                                         "reason": "Parece relevante.",
                                         "category": "tech",
                                     }
@@ -124,8 +125,10 @@ async def test_curator_rejects_invented_numbers(tmp_path) -> None:
         transport=httpx.MockTransport(handler),
     )
 
-    with pytest.raises(CurationError, match="número ausente"):
-        await curator.curate(product())
+    result = await curator.curate(product())
+
+    assert result.copy_repaired
+    assert "48" not in result.description
 
 
 @pytest.mark.asyncio
@@ -138,6 +141,7 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
         assert payload["think"] is False
         assert payload["format"]["type"] == "object"
         assert "relevance_score" not in payload["format"]["properties"]
+        assert "headline" not in payload["format"]["properties"]
         assert payload["options"]["temperature"] == 0
         assert payload["options"]["num_ctx"] == 16384
         serialized = json.dumps(payload, ensure_ascii=False)
@@ -145,7 +149,7 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
         assert "_short" not in serialized
         assert "Aparência é um diferencial" in serialized
         assert "Não repita mecanicamente o título" in serialized
-        assert "A palavra 'cosplay' não descreve keycaps" in serialized
+        assert "não transforma esse objeto em fantasia" in serialized
         assert "Nunca diga que uma característica está ausente" in serialized
         assert "descrição será o único texto editorial visível" in serialized
         assert "deve ser autossuficiente" in serialized
@@ -188,7 +192,7 @@ async def test_ollama_curator_uses_local_structured_output(tmp_path) -> None:
 
     assert result.relevant
     assert result.relevance_score == 100
-    assert result.headline.endswith("✦")
+    assert result.headline == ""
     assert result.description == "Fones de ouvido Bluetooth com gancho ajustável."
 
 
@@ -208,32 +212,19 @@ async def test_ollama_curator_reports_connection_failure(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_ollama_repairs_unsupported_copy_once(tmp_path) -> None:
+async def test_ollama_removes_unsupported_comfort_without_retry(tmp_path) -> None:
     calls = 0
 
     async def handler(request: httpx.Request) -> httpx.Response:
         nonlocal calls
         calls += 1
-        payload = json.loads(request.content)
-        if calls == 1:
-            content = {
-                "relevant": True,
-                "headline": "Fones para seu setup",
-                "product_type": "Fones de ouvido",
-                "description": "Fones de ouvido confortáveis para o computador.",
-                "reason": "Produto de áudio.",
-                "category": "tech",
-            }
-        else:
-            assert "conforto ausente" in payload["messages"][-1]["content"]
-            content = {
-                "relevant": True,
-                "headline": "Som sem fio para acompanhar seu ritmo ✦",
-                "product_type": "Fones de ouvido",
-                "description": "Fones de ouvido Bluetooth com gancho ajustável.",
-                "reason": "Características presentes no título.",
-                "category": "tech",
-            }
+        content = {
+            "relevant": True,
+            "product_type": "Fones de ouvido",
+            "description": "Fones de ouvido confortáveis com Bluetooth.",
+            "reason": "Produto de áudio.",
+            "category": "tech",
+        }
         return httpx.Response(
             200,
             json={"message": {"role": "assistant", "content": json.dumps(content)}},
@@ -247,13 +238,14 @@ async def test_ollama_repairs_unsupported_copy_once(tmp_path) -> None:
 
     result = await curator.curate(product())
 
-    assert calls == 2
+    assert calls == 1
     assert result.relevant
-    assert result.description == "Fones de ouvido Bluetooth com gancho ajustável."
+    assert "confort" not in result.description.casefold()
+    assert "Bluetooth" in result.description
 
 
 @pytest.mark.asyncio
-async def test_ollama_rejects_copy_without_concrete_detail_after_three_attempts(
+async def test_ollama_uses_safe_fallback_after_three_copy_failures(
     tmp_path,
 ) -> None:
     calls = 0
@@ -280,10 +272,12 @@ async def test_ollama_rejects_copy_without_concrete_detail_after_three_attempts(
         transport=httpx.MockTransport(handler),
     )
 
-    with pytest.raises(CurationError, match="diferencial concreto"):
-        await curator.curate(product())
+    result = await curator.curate(product())
 
     assert calls == 3
+    assert result.relevant
+    assert result.copy_repaired
+    assert "Bluetooth" in result.description
 
 
 @pytest.mark.asyncio
@@ -386,7 +380,7 @@ def test_copy_uses_action_figure_instead_of_portuguese_figura() -> None:
         ),
     )
 
-    assert "Action Figure" in result.headline
+    assert result.headline == ""
     assert "Action Figure" in result.description
     assert "Figura" not in result.description
 
@@ -415,8 +409,7 @@ def test_copy_normalizes_figure_de_acao_and_laptop() -> None:
         ),
     )
 
-    assert "Figure de Ação" not in result.headline
-    assert "Action Figure" in result.headline
+    assert result.headline == ""
     assert "laptop" not in result.description.casefold()
     assert "notebook" in result.description.casefold()
 
@@ -517,6 +510,59 @@ def test_ollama_prefixes_detected_keycap_when_model_omits_object_name() -> None:
     assert result.description.startswith("Keycaps:")
 
 
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [
+        ("Suporte universal DL-K20 para Mouse Pad com apoio de braço", "mousepad_support"),
+        ("Mousepad Wuthering Waves com base de borracha", "mousepad"),
+        ("Console portátil R35S para jogos retrô", "console"),
+        ("Suporte de clipe para celular e gamepad Xbox", "gamepad_mount"),
+        ("Tecla de espaço 6.25U PBT para teclado", "keycap"),
+        ("Boneca de pelúcia de Genshin Impact", "plush"),
+        ("Adaptador receptor sem fio GameSir", "adapter"),
+        ("Extrator de switches para teclado mecânico", "switch_extractor"),
+        ("Interruptores clicky de 3 pinos para teclado", "switch"),
+        ("Keycap keyring decorativo do ATEEZ", "keychain"),
+        ("Kit Mobilador com teclado, mouse e mouse pad", "gaming_kit"),
+        ("Bonecos de acrílico de My Hero Academia com chaveiro", "figure"),
+        ("Teclas de resina de Genshin Impact para teclado mecânico", "keycap"),
+    ],
+)
+def test_title_object_detection_covers_products_previously_stuck(
+    title: str, expected: str
+) -> None:
+    assert _title_product_object_keys(title) == {expected}
+
+
+def test_numeric_validation_normalizes_model_and_decimal_separators() -> None:
+    item = Product(
+        marketplace="aliexpress",
+        product_id="adapter",
+        title="Adaptador Bluetooth 2.4G GameSir X5s para PC",
+        product_url="https://example.com/item",
+        affiliate_url="https://example.com/affiliate",
+        image_url="",
+        price=Decimal("100"),
+        original_price=Decimal("120"),
+    )
+
+    result = _validate_copy(
+        item,
+        CurationResult(
+            relevant=True,
+            relevance_score=100,
+            headline="Número interno 999",
+            product_name="Adaptador GameSir X5s",
+            description="Adaptador GameSir com conexão Bluetooth 2,4G.",
+            reason="Modelo e conexão confirmados no título.",
+            category="tech",
+        ),
+    )
+
+    assert result.headline == ""
+    assert "2,4G" in result.description
+
+
 def test_copy_rejects_kawaii_as_generic_published_word() -> None:
     with pytest.raises(CurationError, match="genérica ou proibida"):
         _validate_copy(
@@ -524,8 +570,8 @@ def test_copy_rejects_kawaii_as_generic_published_word() -> None:
             CurationResult(
                 relevant=True,
                 relevance_score=100,
-                headline="Um acessório kawaii para sua rotina",
-                description="Fones de ouvido Bluetooth com gancho ajustável.",
+                headline="",
+                description="Fones de ouvido kawaii com gancho ajustável.",
                 reason="Produto de áudio.",
                 category="tech",
             ),
@@ -547,16 +593,16 @@ def test_copy_rejects_incomplete_or_repeated_description() -> None:
             ),
         )
 
-    with pytest.raises(CurationError, match="repetiu o nome"):
-        _validate_copy(
-            product(),
-            CurationResult(
-                relevant=True,
-                relevance_score=100,
-                headline="Fones de ouvido ✿",
-                product_name="Fones de ouvido",
-                description="Fones de ouvido Bluetooth com gancho ajustável.",
-                reason="Produto de áudio.",
-                category="tech",
-            ),
-        )
+    result = _validate_copy(
+        product(),
+        CurationResult(
+            relevant=True,
+            relevance_score=100,
+            headline="Fones de ouvido ✿",
+            product_name="Fones de ouvido",
+            description="Fones de ouvido Bluetooth com gancho ajustável.",
+            reason="Produto de áudio.",
+            category="tech",
+        ),
+    )
+    assert result.headline == ""

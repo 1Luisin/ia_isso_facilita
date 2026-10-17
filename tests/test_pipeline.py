@@ -214,6 +214,29 @@ async def test_ai_curation_advances_candidates_after_failed_cycle(tmp_path) -> N
 
 
 @pytest.mark.asyncio
+async def test_ai_failure_cooldown_defers_repeated_product(tmp_path) -> None:
+    repository = PublicationRepository(tmp_path / "offers.db")
+    item = (await FakeProvider().discover())[0]
+    for _ in range(3):
+        repository.record_ai_failure(item.fingerprint, "falha de conexão")
+    curator = FailingCurator()
+    service = PromotionService(
+        providers=[FakeProvider()],
+        publisher=FakePublisher(),
+        repository=repository,
+        min_discount_percent=20,
+        max_offers_per_run=1,
+        curator=curator,
+    )
+
+    result = await service.run()
+
+    assert result.ai_deferred == 1
+    assert result.ai_evaluated == 0
+    assert curator.product_ids == []
+
+
+@pytest.mark.asyncio
 async def test_pipeline_publishes_once_and_deduplicates(tmp_path) -> None:
     publisher = FakePublisher()
     service = PromotionService(

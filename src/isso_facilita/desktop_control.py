@@ -631,6 +631,7 @@ class AiControlWindow:
             self.log_table.heading(column, text=headings[column])
             self.log_table.column(column, width=widths[column], minwidth=50, anchor="w")
         self.log_table.tag_configure("accepted", foreground="#72e3ad")
+        self.log_table.tag_configure("repaired", foreground=self.BLUE)
         self.log_table.tag_configure("rejected", foreground="#ff9aa5")
         self.log_table.tag_configure("error", foreground=self.AMBER)
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.log_table.yview)
@@ -799,12 +800,17 @@ class AiControlWindow:
             selected = self.log_records.get(selection[0], {})
             selected_key = (selected.get("timestamp"), selected.get("product_id"))
 
-        entries = read_ai_decisions()
+        entries = read_ai_decisions(unique_products=True)
         self.log_table.delete(*self.log_table.get_children())
         self.log_records.clear()
-        counts = {"accepted": 0, "rejected": 0, "error": 0}
+        counts = {"accepted": 0, "repaired": 0, "rejected": 0, "error": 0}
         selected_item = None
-        labels = {"accepted": "ACEITO", "rejected": "RECUSADO", "error": "ERRO"}
+        labels = {
+            "accepted": "ACEITO",
+            "repaired": "COPY REPARADA",
+            "rejected": "RECUSADO",
+            "error": "ERRO",
+        }
         for index, entry in enumerate(entries):
             status = str(entry.get("status", "error"))
             counts[status] = counts.get(status, 0) + 1
@@ -827,7 +833,7 @@ class AiControlWindow:
         self.log_summary.configure(
             text=(
                 f"{counts['accepted']} aceitos · {counts['rejected']} recusados"
-                f" · {counts['error']} erros"
+                f" · {counts['repaired']} copies reparadas · {counts['error']} erros"
             )
             if entries
             else "Nenhuma avaliação registrada ainda"
@@ -843,7 +849,12 @@ class AiControlWindow:
         entry = self.log_records.get(selection[0])
         if not entry:
             return
-        status_labels = {"accepted": "ACEITO", "rejected": "RECUSADO", "error": "ERRO"}
+        status_labels = {
+            "accepted": "ACEITO",
+            "repaired": "COPY REPARADA",
+            "rejected": "RECUSADO",
+            "error": "ERRO",
+        }
         status = status_labels.get(str(entry.get("status")), "DESCONHECIDO")
         score = entry.get("score")
         threshold = entry.get("threshold")
@@ -851,6 +862,7 @@ class AiControlWindow:
         detail = (
             f"{status} · {score_text}\n"
             f"Motivo: {entry.get('reason') or 'não informado'}\n"
+            f"Reparo: {entry.get('repair_reason') or 'não necessário'}\n"
             f"Link: {entry.get('affiliate_url') or 'não disponível'}"
         )
         self.log_detail.configure(state="normal")
